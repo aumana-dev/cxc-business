@@ -1,0 +1,214 @@
+export const STORAGE_KEY = 'fierro_data_v1';
+export const AUTH_KEY = 'fierro_auth_v1';
+export const paymentTypes = {
+  contado: 'contado',
+  credito: 'credito',
+};
+
+export const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+export function fmt(n) {
+  return '₡' + Math.round(n).toLocaleString('es-CR');
+}
+
+export function isoDays(d) {
+  return Math.round((d - today) / 86400000);
+}
+
+export function toDateInputValue(date) {
+  return date instanceof Date ? date.toISOString().slice(0, 10) : '';
+}
+
+export function parseDateInputValue(value) {
+  return value ? new Date(`${value}T00:00:00`) : null;
+}
+
+export function invoicePaymentLabel(tipo) {
+  return tipo === paymentTypes.contado ? 'Contado' : 'Crédito';
+}
+
+export function daysAgoLocal(n) {
+  const d = new Date(today);
+  d.setDate(d.getDate() - n);
+  return d;
+}
+
+export function daysFromNowLocal(n) {
+  const d = new Date(today);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function seedData() {
+  const clientes = [
+    { id: 'c1', nombre: 'Gimnasio Titán Pavas', contacto: '8888-1234' },
+    { id: 'c2', nombre: 'PowerHouse Heredia', contacto: '8888-5678' },
+    { id: 'c3', nombre: 'CrossFit Curridabat', contacto: '8888-9012' },
+    { id: 'c4', nombre: 'Iron Box Cartago', contacto: '8888-3456' },
+    { id: 'c5', nombre: 'Gym Élite San Pedro', contacto: '8888-7890' },
+  ];
+
+  const productos = [
+    { id: 'p1', nombre: 'Rack de sentadillas 4 postes', sku: 'RCK-004', precio: 485000, stock: 3, min: 2 },
+    { id: 'p2', nombre: 'Banco plano profesional', sku: 'BNC-001', precio: 95000, stock: 1, min: 3 },
+    { id: 'p3', nombre: 'Set mancuernas hex 5-25kg', sku: 'MAN-525', precio: 620000, stock: 0, min: 2 },
+    { id: 'p4', nombre: 'Caminadora eléctrica T200', sku: 'TRD-200', precio: 1250000, stock: 4, min: 2 },
+    { id: 'p5', nombre: 'Polea de cable funcional', sku: 'POL-001', precio: 780000, stock: 2, min: 1 },
+    { id: 'p6', nombre: 'Plataforma de levantamiento', sku: 'PLT-010', precio: 215000, stock: 6, min: 2 },
+    { id: 'p7', nombre: 'Barra olímpica 20kg', sku: 'BAR-020', precio: 138000, stock: 9, min: 4 },
+    { id: 'p8', nombre: 'Bicicleta spinning Pro', sku: 'BIC-300', precio: 540000, stock: 1, min: 2 },
+  ];
+
+  const facturas = [
+    {
+      id: 'f1', clienteId: 'c1', productoId: 'p1', cantidad: 1, monto: 485000, montoOriginal: 485000,
+      emision: daysAgoLocal(40), vencimiento: daysAgoLocal(10), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
+      nota: '',
+    },
+    {
+      id: 'f2', clienteId: 'c2', productoId: 'p4', cantidad: 1, monto: 1250000, montoOriginal: 1250000,
+      emision: daysAgoLocal(35), vencimiento: daysAgoLocal(5), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
+      nota: 'Cliente solicitó extensión de 5 días',
+    },
+    {
+      id: 'f3', clienteId: 'c3', productoId: 'p7', cantidad: 3, monto: 414000, montoOriginal: 414000,
+      emision: daysAgoLocal(20), vencimiento: daysFromNowLocal(3), estadoPago: 'pendiente', tipoPago: paymentTypes.contado,
+      nota: '',
+    },
+    {
+      id: 'f4', clienteId: 'c4', productoId: 'p6', cantidad: 2, monto: 430000, montoOriginal: 430000,
+      emision: daysAgoLocal(15), vencimiento: daysFromNowLocal(12), estadoPago: 'pendiente', tipoPago: paymentTypes.contado,
+      nota: '',
+    },
+    {
+      id: 'f5', clienteId: 'c5', productoId: 'p5', cantidad: 1, monto: 780000, montoOriginal: 780000,
+      emision: daysAgoLocal(50), vencimiento: daysAgoLocal(28), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
+      nota: 'Tercer recordatorio enviado',
+    },
+    {
+      id: 'f6', clienteId: 'c1', productoId: 'p2', cantidad: 2, monto: 190000, montoOriginal: 190000,
+      emision: daysAgoLocal(60), vencimiento: daysAgoLocal(30), estadoPago: 'pagado', fechaPago: daysAgoLocal(32), tipoPago: paymentTypes.contado,
+      nota: '',
+    },
+    {
+      id: 'f7', clienteId: 'c2', productoId: 'p7', cantidad: 5, monto: 690000, montoOriginal: 690000,
+      emision: daysAgoLocal(70), vencimiento: daysAgoLocal(40), estadoPago: 'pagado', fechaPago: daysAgoLocal(42), tipoPago: paymentTypes.contado,
+      nota: '',
+    },
+    {
+      id: 'f8', clienteId: 'c3', productoId: 'p3', cantidad: 1, monto: 620000, montoOriginal: 620000,
+      emision: daysAgoLocal(5), vencimiento: daysFromNowLocal(25), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
+      nota: '',
+    },
+  ];
+
+  return { clientes, productos, facturas, nextFacturaId: 9, nextProductoId: 9, nextClienteId: 6 };
+}
+
+function normalizeInvoice(invoice) {
+  return {
+    ...invoice,
+    tipoPago: invoice.tipoPago || paymentTypes.contado,
+    montoOriginal: invoice.montoOriginal || invoice.monto,
+    emision: invoice.emision ? new Date(invoice.emision) : today,
+    vencimiento: invoice.vencimiento ? new Date(invoice.vencimiento) : today,
+    fechaPago: invoice.fechaPago ? new Date(invoice.fechaPago) : undefined,
+  };
+}
+
+export function loadState() {
+  let raw;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch (e) {
+    raw = null;
+  }
+
+  if (!raw) {
+    return seedData();
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const facturas = (parsed.facturas || []).map(normalizeInvoice);
+    return {
+      clientes: parsed.clientes || [],
+      productos: parsed.productos || [],
+      facturas,
+      nextFacturaId: parsed.nextFacturaId || 1,
+      nextProductoId: parsed.nextProductoId || 1,
+      nextClienteId: parsed.nextClienteId || 1,
+    };
+  } catch (e) {
+    console.error('Datos guardados corruptos, usando datos iniciales:', e);
+    return seedData();
+  }
+}
+
+export function serializeState() {
+  return JSON.stringify({
+    clientes: state.clientes,
+    productos: state.productos,
+    facturas: state.facturas.map(f => ({
+      ...f,
+      emision: f.emision instanceof Date ? f.emision.toISOString() : f.emision,
+      vencimiento: f.vencimiento instanceof Date ? f.vencimiento.toISOString() : f.vencimiento,
+      fechaPago: f.fechaPago instanceof Date ? f.fechaPago.toISOString() : (f.fechaPago || null),
+    })),
+    nextFacturaId: state.nextFacturaId,
+    nextProductoId: state.nextProductoId,
+    nextClienteId: state.nextClienteId,
+  });
+}
+
+export function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, serializeState());
+  } catch (e) {
+    console.error('No se pudo guardar localmente:', e);
+  }
+}
+
+export function clienteById(id) {
+  return state.clientes.find(c => c.id === id);
+}
+
+export function productoById(id) {
+  return state.productos.find(p => p.id === id);
+}
+
+export function estadoFactura(f) {
+  if (f.estadoPago === 'pagado') return 'pagado';
+  const dias = isoDays(f.vencimiento);
+  if (dias < 0) return 'vencido';
+  if (dias <= 7) return 'por_vencer';
+  return 'al_dia';
+}
+
+export function diasMora(f) {
+  const dias = isoDays(f.vencimiento);
+  return dias < 0 ? Math.abs(dias) : 0;
+}
+
+export function createFactura({ clienteId, productoId, cantidad, monto, vencimiento, nota, tipoPago }) {
+  const factura = {
+    id: 'f' + state.nextFacturaId,
+    clienteId,
+    productoId,
+    cantidad,
+    monto,
+    montoOriginal: monto,
+    emision: new Date(),
+    vencimiento: vencimiento || new Date(),
+    estadoPago: 'pendiente',
+    tipoPago: tipoPago || paymentTypes.contado,
+    nota: nota || '',
+  };
+  state.facturas.push(factura);
+  state.nextFacturaId += 1;
+  saveState();
+  return factura;
+}
+
+export const state = loadState();

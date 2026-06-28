@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FIERRO · Cuentas por Cobrar &amp; Inventario</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #14161A;
+      --surface: #1C1F25;
+      --surface-2: #232730;
+      --border: #2E333D;
+      --bone: #ECE8E1;
+      --bone-dim: #9A9CA3;
+      --steel: #6B7280;
+      --rust: #D2691E;
+      --rust-bright: #F0843C;
+      --ok: #5B9C6A;
+      --ok-dim: #355A3D;
+      --warn: #D9A23B;
+      --danger: #C84B3C;
+      --danger-bright: #E8604D;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      background: var(--bg);
+      color: var(--bone);
+      font-family: 'Inter', sans-serif;
+      height: 100%;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* texture: faint diagonal hatch like checker plate */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.012) 0px, rgba(255, 255, 255, 0.012) 1px, transparent 1px, transparent 7px);
+      z-index: 0;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: inherit;
+    }
+
+    input,
+    select {
+      font-family: inherit;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .display {
+      font-family: 'Oswald', sans-serif;
+    }
+
+    /* ============ SIDEBAR ============ */
+    .sidebar {
+      width: 230px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      z-index: 2;
+    }
+
+    .brand {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .brand-mark .plate {
+      width: 10px;
+      height: 26px;
+      background: var(--rust);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--bone);
+    }
+
+    .brand-sub {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--bone-dim);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .nav {
+      flex: 1;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--bone-dim);
+      transition: background 0.15s, color 0.15s;
+      text-align: left;
+      width: 100%;
+    }
+
+    .nav-item svg {
+      width: 17px;
+      height: 17px;
+      flex-shrink: 0;
+      opacity: 0.85;
+    }
+
+    .nav-item:hover {
+      background: var(--surface-2);
+      color: var(--bone);
+    }
+
+    .nav-item.active {
+      background: var(--surface-2);
+      color: var(--bone);
+      box-shadow: inset 3px 0 0 var(--rust);
+    }
+
+    .nav-tag {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--danger-bright);
+      background: rgba(200, 75, 60, 0.14);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .sidebar-foot {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--bone-dim);
+      letter-spacing: 0.4px;
+    }
+
+    /* ============ MAIN ============ */
+    .main {
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      padding: 22px 32px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      gap: 24px;
+    }
+
+    .topbar h1 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .topbar p {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--bone-dim);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--rust);
+      color: #1A0E05;
+    }
+
+    .btn-primary:hover {
+      background: var(--rust-bright);
+    }
+
+    .btn-ghost {
+      background: var(--surface-2);
+      color: var(--bone);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--steel);
+    }
+
+    .content {
+      padding: 28px 32px 60px;
+      max-width: 1320px;
+    }
+
+    /* ============ KPI ROW ============ */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-label {
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--bone-dim);
+      font-weight: 600;
+    }
+
+    .kpi-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 700;
+      margin-top: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .kpi-meta {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--bone-dim);
+    }
+
+    .kpi.danger .kpi-value {
+      color: var(--danger-bright);
+    }
+
+    .kpi.warn .kpi-value {
+      color: var(--warn);
+    }
+
+    .kpi.ok .kpi-value {
+      color: var(--ok);
+    }
+
+    .kpi-bar {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      height: 3px;
+      width: 100%;
+      background: var(--border);
+    }
+
+    .kpi-bar-fill {
+      height: 100%;
+      background: var(--rust);
+    }
+
+    /* ============ SECTION ============ */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .section-head h2 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-head h2 .dash {
+      width: 16px;
+      height: 3px;
+      background: var(--rust);
+      border-radius: 2px;
+    }
+
+    .section-tools {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 12px;
+      min-width: 220px;
+    }
+
+    .search-box svg {
+      width: 14px;
+      height: 14px;
+      color: var(--bone-dim);
+      flex-shrink: 0;
+    }
+
+    .search-box input {
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--bone);
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .search-box input::placeholder {
+      color: var(--bone-dim);
+    }
+
+    select.filter {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--bone);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    /* ============ TABLE ============ */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--bone-dim);
+      font-weight: 600;
+      padding: 12px 22px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13.5px;
+      vertical-align: middle;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr {
+      transition: background 0.12s;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .client-name {
+      font-weight: 600;
+      color: var(--bone);
+    }
+
+    .client-sub {
+      font-size: 12px;
+      color: var(--bone-dim);
+      margin-top: 2px;
+    }
+
+    .amount {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    .status-pill .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .status-ok {
+      background: rgba(91, 156, 106, 0.14);
+      color: var(--ok);
+    }
+
+    .status-ok .dot {
+      background: var(--ok);
+    }
+
+    .status-warn {
+      background: rgba(217, 162, 59, 0.14);
+      color: var(--warn);
+    }
+
+    .status-warn .dot {
+      background: var(--warn);
+    }
+
+    .status-danger {
+      background: rgba(200, 75, 60, 0.16);
+      color: var(--danger-bright);
+    }
+
+    .status-danger .dot {
+      background: var(--danger-bright);
+    }
+
+    /* mora load bar - signature element */
+    .load-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 140px;
+    }
+
+    .load-track {
+      flex: 1;
+      height: 6px;
+      background: var(--bg);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid var(--border);
+    }
+
+    .load-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .load-days {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--bone-dim);
+      min-width: 48px;
+      text-align: right;
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .icon-btn {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      color: var(--bone-dim);
+      border: 1px solid transparent;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface-2);
+      color: var(--bone);
+      border-color: var(--border);
+    }
+
+    .icon-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--bone-dim);
+    }
+
+    .empty-state .dash {
+      width: 24px;
+      height: 3px;
+      background: var(--rust);
+      margin: 0 auto 14px;
+      border-radius: 2px;
+    }
+
+    .empty-state h3 {
+      font-family: 'Oswald', sans-serif;
+      color: var(--bone);
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+    }
+
+    /* ============ INVENTORY GRID ============ */
+    .inv-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 14px;
+      padding: 22px;
+    }
+
+    .inv-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+    }
+
+    .inv-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .inv-name {
+      font-weight: 600;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .inv-sku {
+      font-size: 11px;
+      color: var(--bone-dim);
+      margin-top: 3px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .inv-stock-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .stock-ok {
+      background: rgba(91, 156, 106, 0.14);
+      color: var(--ok);
+    }
+
+    .stock-low {
+      background: rgba(217, 162, 59, 0.14);
+      color: var(--warn);
+    }
+
+    .stock-out {
+      background: rgba(200, 75, 60, 0.16);
+      color: var(--danger-bright);
+    }
+
+    .inv-bar-track {
+      margin-top: 14px;
+      height: 5px;
+      background: var(--bg);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .inv-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .inv-meta {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--bone-dim);
+    }
+
+    .inv-meta .price {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--bone);
+      font-weight: 600;
+    }
+
+    /* ============ MODAL ============ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 11, 13, 0.7);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 20px;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 520px;
+      max-height: 88vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-head h3 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      color: var(--bone-dim);
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+    }
+
+    .modal-close:hover {
+      background: var(--surface-2);
+      color: var(--bone);
+    }
+
+    .modal-body {
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--bone-dim);
+      letter-spacing: 0.3px;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: var(--bone);
+      font-size: 13.5px;
+      outline: none;
+      width: 100%;
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--rust);
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .modal-foot {
+      padding: 18px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* ============ TABS ============ */
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--steel);
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--rust-bright);
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 980px) {
+      .sidebar {
+        display: none;
+      }
+
+      .kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .field-row {
+        grid-template-columns: 1fr;
+      }
+
+      .content {
+        padding: 20px;
+      }
+
+      .topbar {
+        padding: 18px 20px;
+        flex-direction: column;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+
+    /* ============ LOGIN ============ */
+    .login-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: none !important;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .login-screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.012) 0px, rgba(255, 255, 255, 0.012) 1px, transparent 1px, transparent 7px);
+    }
+
+    .login-card {
+      position: relative;
+      width: 100%;
+      max-width: 380px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 36px 32px 30px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+
+    .login-brand .plate {
+      width: 10px;
+      height: 28px;
+      background: var(--rust);
+      border-radius: 2px;
+    }
+
+    .login-brand .name {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: 26px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .login-sub {
+      text-align: center;
+      font-size: 12px;
+      color: var(--bone-dim);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+
+    .login-error {
+      background: rgba(200, 75, 60, 0.14);
+      border: 1px solid rgba(200, 75, 60, 0.4);
+      color: var(--danger-bright);
+      font-size: 12.5px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .login-foot {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--bone-dim);
+    }
+
+    body.locked>*:not(.login-screen) {
+      display: none !important;
+    }
+
+    .row-actions .icon-btn.danger:hover {
+      background: rgba(200, 75, 60, 0.16);
+      color: var(--danger-bright);
+      border-color: rgba(200, 75, 60, 0.4);
+    }
+
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--bone-dim);
+      padding: 7px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-2);
+    }
+
+    .user-pill strong {
+      color: var(--bone);
+      font-weight: 600;
+    }
+
+    .user-pill button {
+      color: var(--bone-dim);
+      font-size: 12px;
+      text-decoration: underline;
+      margin-left: 4px;
+    }
+
+    .user-pill button:hover {
+      color: var(--danger-bright);
+    }
+
+    .save-indicator {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--bone-dim);
+      font-size: 12px;
+      padding: 7px 14px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 40;
+      pointer-events: none;
+    }
+
+    .save-indicator.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .save-indicator .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ok);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="plate"></div>
+        <div class="name">Fierro</div>
+      </div>
+      <div class="login-sub">Iniciar sesión</div>
+      <div class="login-error" id="loginError">Usuario o contraseña incorrectos.</div>
+      <div class="field" style="margin-bottom:14px;">
+        <label>Usuario</label>
+        <input type="text" id="loginUser" placeholder="Usuario" autocomplete="username">
+      </div>
+      <div class="field" style="margin-bottom:18px;">
+        <label>Contraseña</label>
+        <input type="password" id="loginPass" placeholder="Contraseña" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" id="loginBtn" style="width:100%; justify-content:center;">Entrar</button>
+      <div class="login-foot">Sesión local · FIERRO v0.2</div>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <div class="plate"></div>
+        <div class="brand-name">Fierro</div>
+      </div>
+      <div class="brand-sub">CxC &amp; Inventario</div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-view="cxc">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M3 9h18M8 4v5" />
+        </svg>
+        Cuentas por cobrar
+        <span class="nav-tag" id="navTagVencidas">0</span>
+      </button>
+      <button class="nav-item" data-view="inventario">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8" />
+        </svg>
+        Inventario
+      </button>
+      <button class="nav-item" data-view="clientes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="8" r="3.5" />
+          <path d="M2.5 19c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6M16.5 8.5a3 3 0 110-5M16 13c2.5.3 4.5 2 4.5 4.5" />
+        </svg>
+        Clientes
+      </button>
+    </nav>
+    <div class="sidebar-foot">v0.1 · prototipo</div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ===== TOPBAR ===== -->
+    <div class="topbar">
+      <div>
+        <h1 id="pageTitle">Cuentas por cobrar</h1>
+        <p id="pageSub">Facturas pendientes de cobro a clientes de equipo de gimnasio</p>
+      </div>
+      <div style="display:flex; gap:10px; align-items:flex-start;">
+        <div class="user-pill">
+          <strong id="userPillName">Cristian</strong>
+          <button id="btnLogout">Salir</button>
+        </div>
+        <button class="btn btn-ghost" id="btnExport">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+          </svg>
+          Exportar
+        </button>
+        <button class="btn btn-primary" id="btnNew">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span id="btnNewLabel">Nueva factura</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ===== VIEW: CXC ===== -->
+      <div class="view active" id="view-cxc">
+
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="kpi-label">Total por cobrar</div>
+            <div class="kpi-value mono" id="kpiTotal">₡0</div>
+            <div class="kpi-meta" id="kpiTotalMeta">0 facturas activas</div>
+          </div>
+          <div class="kpi danger">
+            <div class="kpi-label">Vencido</div>
+            <div class="kpi-value mono" id="kpiVencido">₡0</div>
+            <div class="kpi-meta" id="kpiVencidoMeta">0 facturas en mora</div>
+            <div class="kpi-bar">
+              <div class="kpi-bar-fill" id="kpiVencidoBar" style="width:0%; background:var(--danger-bright);"></div>
+            </div>
+          </div>
+          <div class="kpi warn">
+            <div class="kpi-label">Vence en 7 días</div>
+            <div class="kpi-value mono" id="kpiProx">₡0</div>
+            <div class="kpi-meta" id="kpiProxMeta">0 facturas por vencer</div>
+          </div>
+          <div class="kpi ok">
+            <div class="kpi-label">Cobrado este mes</div>
+            <div class="kpi-value mono" id="kpiCobrado">₡0</div>
+            <div class="kpi-meta" id="kpiCobradoMeta">0 pagos registrados</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <h2><span class="dash"></span>Facturas pendientes</h2>
+            <div class="section-tools">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M21 21l-4-4" />
+                </svg>
+                <input type="text" id="searchCxc" placeholder="Buscar cliente o factura...">
+              </div>
+              <select class="filter" id="filterEstado">
+                <option value="todos">Todos los estados</option>
+                <option value="al_dia">Al día</option>
+                <option value="por_vencer">Por vencer</option>
+                <option value="vencido">Vencido</option>
+              </select>
+            </div>
+          </div>
+          <div id="cxcTableWrap"></div>
+        </div>
+      </div>
+
+      <!-- ===== VIEW: INVENTARIO ===== -->
+      <div class="view" id="view-inventario">
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="kpi-label">Valor del inventario</div>
+            <div class="kpi-value mono" id="kpiInvValor">₡0</div>
+            <div class="kpi-meta" id="kpiInvMeta">0 productos</div>
+          </div>
+          <div class="kpi warn">
+            <div class="kpi-label">Stock bajo</div>
+            <div class="kpi-value mono" id="kpiInvBajo">0</div>
+            <div class="kpi-meta">productos bajo el mínimo</div>
+          </div>
+          <div class="kpi danger">
+            <div class="kpi-label">Agotados</div>
+            <div class="kpi-value mono" id="kpiInvAgotado">0</div>
+            <div class="kpi-meta">requieren reorden inmediato</div>
+          </div>
+          <div class="kpi ok">
+            <div class="kpi-label">Unidades totales</div>
+            <div class="kpi-value mono" id="kpiInvUnidades">0</div>
+            <div class="kpi-meta">en bodega</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <h2><span class="dash"></span>Productos en inventario</h2>
+            <div class="section-tools">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M21 21l-4-4" />
+                </svg>
+                <input type="text" id="searchInv" placeholder="Buscar producto o SKU...">
+              </div>
+            </div>
+          </div>
+          <div class="inv-grid" id="invGrid"></div>
+        </div>
+      </div>
+
+      <!-- ===== VIEW: CLIENTES ===== -->
+      <div class="view" id="view-clientes">
+        <div class="section">
+          <div class="section-head">
+            <h2><span class="dash"></span>Clientes</h2>
+            <div class="section-tools">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M21 21l-4-4" />
+                </svg>
+                <input type="text" id="searchCli" placeholder="Buscar cliente...">
+              </div>
+              <button class="btn btn-primary" id="btnNewCliente">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Nuevo cliente
+              </button>
+            </div>
+          </div>
+          <div id="cliTableWrap"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===== MODAL: NUEVA FACTURA ===== -->
+  <div class="modal-overlay" id="modalFactura" style="display:none;">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Nueva factura por cobrar</h3>
+        <button class="modal-close" id="closeModalFactura">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Cliente</label>
+          <select id="fCliente"></select>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Producto</label>
+            <select id="fProducto"></select>
+          </div>
+          <div class="field">
+            <label>Cantidad</label>
+            <input type="number" id="fCantidad" value="1" min="1">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Monto total (₡)</label>
+            <input type="number" id="fMonto" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Fecha de vencimiento</label>
+            <input type="date" id="fVencimiento">
+          </div>
+        </div>
+        <div class="field">
+          <label>Tipo de pago</label>
+          <select id="fTipoPago">
+            <option value="credito">Crédito</option>
+            <option value="contado">Contado</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nota (opcional)</label>
+          <textarea id="fNota" rows="2" placeholder="Ej: pago en 2 partes, anticipo recibido..."></textarea>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelFactura">Cancelar</button>
+        <button class="btn btn-primary" id="saveFactura">Guardar factura</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: REGISTRAR PAGO ===== -->
+  <div class="modal-overlay" id="modalPago" style="display:none;">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-head">
+        <h3>Registrar pago</h3>
+        <button class="modal-close" id="closeModalPago">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="pagoInfo" style="font-size:13px; color:var(--bone-dim);"></div>
+        <div class="field">
+          <label>Monto recibido (₡)</label>
+          <input type="number" id="pMonto" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Fecha de pago</label>
+          <input type="date" id="pFecha">
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelPago">Cancelar</button>
+        <button class="btn btn-primary" id="savePago">Confirmar pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: CLIENTE (CREAR/EDITAR) ===== -->
+  <div class="modal-overlay" id="modalCliente" style="display:none;">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-head">
+        <h3 id="modalClienteTitle">Nuevo cliente</h3>
+        <button class="modal-close" id="closeModalCliente">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="icId">
+        <div class="field">
+          <label>Nombre del gimnasio / negocio</label>
+          <input type="text" id="icNombre" placeholder="Ej: Gimnasio Titán Pavas">
+        </div>
+        <div class="field">
+          <label>Contacto (teléfono)</label>
+          <input type="text" id="icContacto" placeholder="Ej: 8888-1234">
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelCliente">Cancelar</button>
+        <button class="btn btn-primary" id="saveCliente">Guardar cliente</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: CONFIRMAR ELIMINAR CLIENTE ===== -->
+  <div class="modal-overlay" id="modalDeleteCliente" style="display:none;">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-head">
+        <h3>Eliminar cliente</h3>
+        <button class="modal-close" id="closeModalDeleteCliente">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="deleteClienteMsg" style="font-size:13.5px; color:var(--bone-dim); line-height:1.5;"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelDeleteCliente">Cancelar</button>
+        <button class="btn btn-primary" id="confirmDeleteCliente"
+          style="background:var(--danger-bright); color:#1A0E05;">Eliminar definitivamente</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: NUEVO PRODUCTO ===== -->
+  <div class="modal-overlay" id="modalProducto" style="display:none;">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Nuevo producto</h3>
+        <button class="modal-close" id="closeModalProducto">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Nombre del producto</label>
+          <input type="text" id="ipNombre" placeholder="Ej: Rack de sentadillas 4 postes">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>SKU</label>
+            <input type="text" id="ipSku" placeholder="Ej: RCK-004">
+          </div>
+          <div class="field">
+            <label>Precio unitario (₡)</label>
+            <input type="number" id="ipPrecio" placeholder="0">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Stock actual</label>
+            <input type="number" id="ipStock" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Stock mínimo</label>
+            <input type="number" id="ipMin" placeholder="0">
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelProducto">Cancelar</button>
+        <button class="btn btn-primary" id="saveProducto">Guardar producto</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="save-indicator" id="saveIndicator"><span class="dot"></span>Guardado</div>
+
+  <script>
+    document.body.classList.remove('locked');
+    const loginScreen = document.getElementById('loginScreen');
+    if (loginScreen) loginScreen.style.display = 'none';
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
