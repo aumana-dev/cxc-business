@@ -14,7 +14,9 @@ import {
   isoDays,
   saveState,
   createFactura,
+  registrarPago,
   AUTH_KEY,
+  findPortalUserByUsername,
 } from './state.js';
 
 function query(id) {
@@ -23,6 +25,30 @@ function query(id) {
 
 function getPaymentTypeSelect() {
   return query('fTipoPago');
+}
+
+function getStoredAuth() {
+  try {
+    return sessionStorage.getItem(AUTH_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+
+function setStoredAuth(value) {
+  try {
+    sessionStorage.setItem(AUTH_KEY, value);
+  } catch (e) {
+    // ignore storage issues
+  }
+}
+
+function clearStoredAuth() {
+  try {
+    sessionStorage.removeItem(AUTH_KEY);
+  } catch (e) {
+    // ignore storage issues
+  }
 }
 
 function syncPaymentType() {
@@ -39,17 +65,25 @@ function syncPaymentType() {
   }
 }
 
+function getFacturaPagos(factura) {
+  return Array.isArray(factura && factura.pagos) ? factura.pagos : [];
+}
+
+function getFacturaPagadoTotal(factura) {
+  return getFacturaPagos(factura).reduce((sum, pago) => sum + (Number(pago.monto) || 0), 0);
+}
+
 function renderKpisCxc() {
   const pendientes = state.facturas.filter(f => f.estadoPago === 'pendiente');
-  const total = pendientes.reduce((s, f) => s + f.monto, 0);
+  const total = pendientes.reduce((s, f) => s + (Number(f.monto) || 0), 0);
   const vencidas = pendientes.filter(f => estadoFactura(f) === 'vencido');
-  const vencidoMonto = vencidas.reduce((s, f) => s + f.monto, 0);
+  const vencidoMonto = vencidas.reduce((s, f) => s + (Number(f.monto) || 0), 0);
   const porVencer = pendientes.filter(f => estadoFactura(f) === 'por_vencer');
-  const porVencerMonto = porVencer.reduce((s, f) => s + f.monto, 0);
+  const porVencerMonto = porVencer.reduce((s, f) => s + (Number(f.monto) || 0), 0);
 
-  const cobradoMes = state.facturas.filter(f => f.estadoPago === 'pagado' && f.fechaPago &&
-    f.fechaPago.getMonth() === new Date().getMonth() && f.fechaPago.getFullYear() === new Date().getFullYear());
-  const cobradoMonto = cobradoMes.reduce((s, f) => s + f.monto, 0);
+  const cobradoMes = state.facturas.filter(f => (f.pagos || []).some(p => p.fecha &&
+    p.fecha.getMonth() === new Date().getMonth() && p.fecha.getFullYear() === new Date().getFullYear()));
+  const cobradoMonto = cobradoMes.reduce((s, f) => s + getFacturaPagadoTotal(f), 0);
 
   query('kpiTotal').textContent = fmt(total);
   query('kpiTotalMeta').textContent = `${pendientes.length} factura${pendientes.length === 1 ? '' : 's'} activa${pendientes.length === 1 ? '' : 's'}`;
@@ -101,8 +135,12 @@ function renderTablaCxc() {
   const search = query('searchCxc').value.trim().toLowerCase();
   const filtro = query('filterEstado').value;
 
-  let rows = state.facturas.filter(f => f.estadoPago === 'pendiente');
-  if (filtro !== 'todos') {
+  let rows = state.facturas.filter(f => f.estadoPago !== 'pagado');
+  if (filtro === 'pagado') {
+    rows = state.facturas.filter(f => f.estadoPago === 'pagado');
+  } else if (filtro === 'pendientes') {
+    rows = rows.filter(f => f.estadoPago === 'pendiente');
+  } else if (filtro !== 'todos') {
     rows = rows.filter(f => estadoFactura(f) === filtro);
   }
   if (search) {
@@ -153,7 +191,7 @@ function renderTablaCxc() {
               <div class="client-sub">x${f.cantidad}</div>
             </td>
             <td>${invoicePaymentLabel(f.tipoPago)}</td>
-            <td class="amount">${fmt(f.monto)}</td>
+            <td class="amount">${fmt(f.monto)}<div class="client-sub">${f.estadoPago === 'pagado' ? 'Cerrada' : 'Saldo pendiente'}</div></td>
             <td class="mono">${f.vencimiento.toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
             <td>${statusPillHtml(estado)}</td>
             <td>${loadBarHtml(f)}</td>
@@ -242,18 +280,22 @@ function renderClientes() {
   }
 
   wrap.innerHTML = `<table>
-      <thead><tr><th>Cliente</th><th>Contacto</th><th>Facturas activas</th><th>Saldo pendiente</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Cliente</th><th>Contacto</th><th>Facturas activas</th><th>Saldo pendiente</th><th>Total pagado</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         ${list.map(c => {
-    const fs = state.facturas.filter(f => f.clienteId === c.id && f.estadoPago === 'pendiente');
-    const saldo = fs.reduce((s, f) => s + f.monto, 0);
-    const tieneVencido = fs.some(f => estadoFactura(f) === 'vencido');
+    const fs = state.facturas.filter(f => f.clienteId === c.id);
+    const pendientes = fs.filter(f => f.estadoPago === 'pendiente');
+    const saldo = pendientes.reduce((s, f) => s + (Number(f.monto) || 0), 0);
+    const totalPagado = fs.reduce((s, f) => s + getFacturaPagadoTotal(f), 0);
+    const tieneVencido = pendientes.some(f => estadoFactura(f) === 'vencido');
+    const estado = pendientes.length === 0 ? 'al_dia' : (tieneVencido ? 'vencido' : 'al_dia');
     return `<tr>
             <td class="client-name">${c.nombre}</td>
             <td class="mono">${c.contacto || '—'}</td>
-            <td>${fs.length}</td>
+            <td>${pendientes.length}</td>
             <td class="amount">${fmt(saldo)}</td>
-            <td>${fs.length === 0 ? statusPillHtml('al_dia') : (tieneVencido ? statusPillHtml('vencido') : statusPillHtml('al_dia'))}</td>
+            <td class="amount">${fmt(totalPagado)}</td>
+            <td>${statusPillHtml(estado)}</td>
             <td>
               <div class="row-actions">
                 <button class="icon-btn" data-action="editar-cliente" data-id="${c.id}" title="Editar cliente">
@@ -282,6 +324,7 @@ function renderAll() {
   renderTablaCxc();
   renderInventario();
   renderClientes();
+  renderPortalView();
   saveState();
 }
 
@@ -339,11 +382,21 @@ function openPagoModal(facturaId) {
   if (!f) return;
   const c = clienteById(f.clienteId);
   const p = productoById(f.productoId);
+  const saldoActual = Number(f.monto) || 0;
+  const pagos = getFacturaPagos(f);
+  const totalPagado = getFacturaPagadoTotal(f);
+  const historialHtml = pagos.length > 0
+    ? `<div style="display:grid; gap:6px; margin-top:6px;">${pagos.map(pago => `<div style="display:flex; justify-content:space-between; gap:8px; color:var(--bone);"><span>${pago.fecha ? new Date(pago.fecha).toLocaleDateString('es-CR') : 'Fecha no registrada'}</span><span class="mono">${fmt(Number(pago.monto) || 0)}</span></div>`).join('')}</div>`
+    : '<div style="margin-top:6px; color:var(--bone-dim);">Aún no hay pagos registrados.</div>';
+
   query('pagoInfo').innerHTML = `
     <strong style="color:var(--bone)">${c ? c.nombre : 'Cliente'}</strong> — ${p ? p.nombre : 'Producto'}<br>
-    Tipo: <strong>${invoicePaymentLabel(f.tipoPago)}</strong><br>
-    Saldo pendiente: <span class="mono" style="color:var(--rust-bright); font-weight:700;">${fmt(f.monto)}</span>`;
-  query('pMonto').value = f.monto;
+  const totalPagado = facturas.reduce((sum, f) => sum + getFacturaPagadoTotal(f), 0);
+    Saldo pendiente: <span class="mono" style="color:var(--rust-bright); font-weight:700;">${fmt(saldoActual)}</span><br>
+    Total pagado: <span class="mono" style="color:var(--ok);">${fmt(totalPagado)}</span><br>
+    <span style="color:var(--bone-dim);">Si el monto cubre el saldo total, la factura se cerrará y quedará registrada en historial.</span>`;
+  query('pagoHistorial').innerHTML = `<div style="font-weight:600; color:var(--bone); margin-bottom:6px;">Historial de pagos</div>${historialHtml}`;
+  query('pMonto').value = saldoActual;
   query('pFecha').value = toDateInputValue(today);
   modalPago.style.display = 'flex';
 }
@@ -485,11 +538,99 @@ function exportarCsv() {
   downloadCsv(filename, rows);
 }
 
+function renderPortalView() {
+  const authValue = getStoredAuth();
+  const isPortal = typeof authValue === 'string' && authValue.startsWith('portal:');
+  const portalScreen = query('portalScreen');
+  if (!portalScreen) return;
+
+  if (!isPortal) {
+    portalScreen.style.display = 'none';
+    portalScreen.style.visibility = 'hidden';
+    return;
+  }
+
+  const username = authValue.replace('portal:', '');
+  const portalUser = findPortalUserByUsername(username);
+  if (!portalUser) {
+    clearStoredAuth();
+    checkAuth();
+    return;
+  }
+
+  const cliente = clienteById(portalUser.clientId);
+  const facturasBase = (state.facturas || []).filter(f => f.clienteId === portalUser.clientId);
+  const facturas = facturasBase.map(f => ({
+    ...f,
+    pagos: Array.isArray(f.pagos) ? f.pagos.map(pago => ({
+      ...pago,
+      fecha: pago.fecha ? new Date(pago.fecha) : new Date(),
+    })) : [],
+  }));
+  const pendientes = facturas.filter(f => f.estadoPago === 'pendiente');
+  const saldo = pendientes.reduce((sum, f) => sum + (Number(f.monto) || 0), 0);
+  const totalPagado = facturas.reduce((sum, f) => sum + ((f.pagos || []).reduce((paymentSum, pago) => paymentSum + (Number(pago.monto) || 0), 0)), 0);
+  const pagos = facturas.flatMap(f => (f.pagos || []).map(pago => ({
+    ...pago,
+    facturaId: f.id,
+    fecha: pago.fecha ? new Date(pago.fecha) : new Date(),
+  }))).sort((a, b) => b.fecha - a.fecha);
+  const lastPayment = pagos[0] || null;
+
+  query('portalUserName').textContent = portalUser.label;
+  query('portalClientName').textContent = cliente ? cliente.nombre : portalUser.label;
+  query('portalBalance').textContent = fmt(saldo);
+  query('portalPaid').textContent = fmt(totalPagado);
+  query('portalSummary').textContent = `${pendientes.length} factura${pendientes.length === 1 ? '' : 's'} pendiente${pendientes.length === 1 ? '' : 's'} · Últimos movimientos: ${lastPayment ? `${fmt(Number(lastPayment.monto) || 0)} · ${new Date(lastPayment.fecha).toLocaleDateString('es-CR')}` : 'Sin pagos aún'}`;
+
+  if (facturas.length === 0) {
+    query('portalInvoiceList').innerHTML = '<div class="portal-empty">Aún no hay facturas registradas para este negocio.</div>';
+  } else {
+    query('portalInvoiceList').innerHTML = facturas.map(f => {
+      const estado = f.estadoPago === 'pagado' ? 'Pagada' : 'Pendiente';
+      const saldoFactura = fmt(Number(f.monto) || 0);
+      const pagosFactura = (f.pagos || []).slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      const pagosHtml = pagosFactura.length > 0
+        ? pagosFactura.map(pago => `<div class="portal-payment-item"><span>${new Date(pago.fecha).toLocaleDateString('es-CR')}</span><strong>${fmt(Number(pago.monto) || 0)}</strong></div>`).join('')
+        : '<div class="portal-empty">Sin pagos registrados aún.</div>';
+      return `<div class="portal-item"><div><strong>Factura ${f.id}</strong><div class="portal-item-sub">${f.productoId ? 'Producto asociado' : 'Detalle disponible'}</div>${pagosHtml}</div><div class="portal-item-balance">${saldoFactura}<br><span>${estado}</span></div></div>`;
+    }).join('');
+  }
+
+  if (pagos.length === 0) {
+    query('portalPaymentList').innerHTML = '<div class="portal-empty">Aún no hay registros de pagos para este negocio.</div>';
+  } else {
+    query('portalPaymentList').innerHTML = pagos.map(pago => `
+      <div class="portal-item">
+        <div>
+          <strong>Factura ${pago.facturaId}</strong>
+          <div class="portal-item-sub">${new Date(pago.fecha).toLocaleDateString('es-CR')}</div>
+        </div>
+        <div class="portal-item-balance">${fmt(Number(pago.monto) || 0)}<br><span>Pago registrado</span></div>
+      </div>
+    `).join('');
+  }
+
+  portalScreen.style.display = 'flex';
+  portalScreen.style.visibility = 'visible';
+}
+
 function checkAuth() {
-  // Login gate disabled so the app shows tables immediately.
-  document.body.classList.remove('locked');
+  const authValue = getStoredAuth();
+  const isPortal = typeof authValue === 'string' && authValue.startsWith('portal:');
+  const isLoggedIn = isPortal || authValue === 'admin';
+
+  document.body.classList.toggle('locked', !isLoggedIn);
+  document.body.classList.toggle('portal-mode', isPortal);
+
   const loginScreen = document.getElementById('loginScreen');
-  if (loginScreen) loginScreen.style.display = 'none';
+  if (loginScreen) {
+    loginScreen.style.display = isLoggedIn && !isPortal ? 'none' : (isLoggedIn ? 'none' : 'flex');
+    loginScreen.style.visibility = isLoggedIn && !isPortal ? 'hidden' : 'visible';
+  }
+
+  renderPortalView();
+  return isLoggedIn;
 }
 
 function attemptLogin() {
@@ -499,8 +640,16 @@ function attemptLogin() {
   const VALID_USER = 'Cristian';
   const VALID_PASS = 'Cris1234';
 
+  const portalUser = findPortalUserByUsername(user);
+  if (portalUser && pass === portalUser.password) {
+    setStoredAuth(`portal:${portalUser.username}`);
+    errBox.style.display = 'none';
+    checkAuth();
+    return;
+  }
+
   if (user === VALID_USER && pass === VALID_PASS) {
-    try { sessionStorage.setItem(AUTH_KEY, '1'); } catch (e) { }
+    setStoredAuth('admin');
     errBox.style.display = 'none';
     checkAuth();
   } else {
@@ -577,12 +726,11 @@ function setupEventListeners() {
     const fecha = query('pFecha').value;
     if (!monto || monto <= 0) { alert('Ingresá un monto válido.'); return; }
 
-    if (monto >= f.monto) {
-      f.estadoPago = 'pagado';
-      f.fechaPago = parseDateInputValue(fecha);
-    } else {
-      f.monto = f.monto - monto;
-    }
+    registrarPago(f, {
+      monto,
+      fecha: parseDateInputValue(fecha),
+      nota: '',
+    });
 
     closePagoModal();
     renderAll();
@@ -620,11 +768,23 @@ function setupEventListeners() {
   modalProducto.addEventListener('click', (e) => { if (e.target === modalProducto) closeProductoModal(); });
 
   query('btnLogout').addEventListener('click', () => {
-    try { sessionStorage.removeItem(AUTH_KEY); } catch (e) { }
+    clearStoredAuth();
     query('loginUser').value = '';
     query('loginPass').value = '';
+    query('loginError').style.display = 'none';
     checkAuth();
   });
+
+  const portalLogout = query('portalLogout');
+  if (portalLogout) {
+    portalLogout.addEventListener('click', () => {
+      clearStoredAuth();
+      query('loginUser').value = '';
+      query('loginPass').value = '';
+      query('loginError').style.display = 'none';
+      checkAuth();
+    });
+  }
 
   query('loginBtn').addEventListener('click', attemptLogin);
   query('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptLogin(); });

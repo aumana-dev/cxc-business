@@ -1,5 +1,18 @@
 export const STORAGE_KEY = 'fierro_data_v1';
 export const AUTH_KEY = 'fierro_auth_v1';
+export const portalUsers = [
+  {
+    username: 'gimnasio-titan',
+    password: 'Negocio2025',
+    clientId: 'c1',
+    label: 'Gimnasio Titán Pavas',
+  },
+];
+
+export function findPortalUserByUsername(username) {
+  return portalUsers.find(user => user.username === username);
+}
+
 export const paymentTypes = {
   contado: 'contado',
   credito: 'credito',
@@ -62,8 +75,16 @@ function seedData() {
 
   const facturas = [
     {
-      id: 'f1', clienteId: 'c1', productoId: 'p1', cantidad: 1, monto: 485000, montoOriginal: 485000,
+      id: 'f1', clienteId: 'c1', productoId: 'p1', cantidad: 1, monto: 335000, montoOriginal: 485000,
       emision: daysAgoLocal(40), vencimiento: daysAgoLocal(10), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
+      pagos: [
+        {
+          id: 'p-seed-1',
+          monto: 150000,
+          fecha: daysAgoLocal(3),
+          nota: 'Pago demo del negocio',
+        },
+      ],
       nota: '',
     },
     {
@@ -107,13 +128,25 @@ function seedData() {
 }
 
 function normalizeInvoice(invoice) {
+  const pagos = Array.isArray(invoice.pagos) ? invoice.pagos.map(p => ({
+    ...p,
+    monto: Number(p.monto) || 0,
+    fecha: p.fecha ? new Date(p.fecha) : new Date(),
+  })) : [];
+
+  const saldoActual = Number(invoice.monto) || 0;
+  const montoOriginal = Number(invoice.montoOriginal || invoice.monto || 0);
+
   return {
     ...invoice,
     tipoPago: invoice.tipoPago || paymentTypes.contado,
-    montoOriginal: invoice.montoOriginal || invoice.monto,
-    emision: invoice.emision ? new Date(invoice.emision) : today,
+    montoOriginal,
+    monto: saldoActual > 0 ? saldoActual : 0,
+    emision: invoice.emision ? new Date(invoice.emission || invoice.emision) : today,
     vencimiento: invoice.vencimiento ? new Date(invoice.vencimiento) : today,
-    fechaPago: invoice.fechaPago ? new Date(invoice.fechaPago) : undefined,
+    fechaPago: invoice.fechaPago ? new Date(invoice.fechaPago) : (pagos.length > 0 ? pagos[pagos.length - 1].fecha : undefined),
+    pagos,
+    estadoPago: invoice.estadoPago || (saldoActual <= 0 ? 'pagado' : 'pendiente'),
   };
 }
 
@@ -132,6 +165,7 @@ export function loadState() {
   try {
     const parsed = JSON.parse(raw);
     const facturas = (parsed.facturas || []).map(normalizeInvoice);
+
     return {
       clientes: parsed.clientes || [],
       productos: parsed.productos || [],
@@ -155,6 +189,10 @@ export function serializeState() {
       emision: f.emision instanceof Date ? f.emision.toISOString() : f.emision,
       vencimiento: f.vencimiento instanceof Date ? f.vencimiento.toISOString() : f.vencimiento,
       fechaPago: f.fechaPago instanceof Date ? f.fechaPago.toISOString() : (f.fechaPago || null),
+      pagos: (f.pagos || []).map(p => ({
+        ...p,
+        fecha: p.fecha instanceof Date ? p.fecha.toISOString() : p.fecha,
+      })),
     })),
     nextFacturaId: state.nextFacturaId,
     nextProductoId: state.nextProductoId,
@@ -204,9 +242,34 @@ export function createFactura({ clienteId, productoId, cantidad, monto, vencimie
     estadoPago: 'pendiente',
     tipoPago: tipoPago || paymentTypes.contado,
     nota: nota || '',
+    pagos: [],
   };
   state.facturas.push(factura);
   state.nextFacturaId += 1;
+  saveState();
+  return factura;
+}
+
+export function registrarPago(factura, { monto, fecha, nota = '' }) {
+  if (!factura) return null;
+  const montoRecibido = Math.max(0, Number(monto) || 0);
+  const saldoActual = Math.max(0, Number(factura.monto) || 0);
+  const pagoValido = Math.min(montoRecibido, saldoActual);
+
+  if (pagoValido <= 0) return factura;
+
+  const pago = {
+    id: 'p' + Date.now() + Math.round(Math.random() * 1000),
+    monto: pagoValido,
+    fecha: fecha ? new Date(fecha) : new Date(),
+    nota,
+  };
+
+  factura.pagos = factura.pagos || [];
+  factura.pagos.push(pago);
+  factura.monto = Math.max(0, saldoActual - pagoValido);
+  factura.fechaPago = pago.fecha;
+  factura.estadoPago = factura.monto <= 0 ? 'pagado' : 'pendiente';
   saveState();
   return factura;
 }
