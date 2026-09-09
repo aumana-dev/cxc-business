@@ -25,6 +25,19 @@ export function fmt(n) {
   return '₡' + Math.round(n).toLocaleString('es-CR');
 }
 
+export const monedas = {
+  crc: 'CRC',
+  usd: 'USD',
+};
+
+export function convertToCRC(amount, moneda, tipoCambio) {
+  const value = Number(amount) || 0;
+  if (moneda === monedas.usd) {
+    return Math.round(value * (Number(tipoCambio) || 0));
+  }
+  return Math.round(value);
+}
+
 export function isoDays(d) {
   return Math.round((d - today) / 86400000);
 }
@@ -63,68 +76,99 @@ function seedData() {
   ];
 
   const productos = [
-    { id: 'p1', nombre: 'Rack de sentadillas 4 postes', sku: 'RCK-004', precio: 485000, stock: 3, min: 2 },
-    { id: 'p2', nombre: 'Banco plano profesional', sku: 'BNC-001', precio: 95000, stock: 1, min: 3 },
-    { id: 'p3', nombre: 'Set mancuernas hex 5-25kg', sku: 'MAN-525', precio: 620000, stock: 0, min: 2 },
-    { id: 'p4', nombre: 'Caminadora eléctrica T200', sku: 'TRD-200', precio: 1250000, stock: 4, min: 2 },
-    { id: 'p5', nombre: 'Polea de cable funcional', sku: 'POL-001', precio: 780000, stock: 2, min: 1 },
-    { id: 'p6', nombre: 'Plataforma de levantamiento', sku: 'PLT-010', precio: 215000, stock: 6, min: 2 },
-    { id: 'p7', nombre: 'Barra olímpica 20kg', sku: 'BAR-020', precio: 138000, stock: 9, min: 4 },
-    { id: 'p8', nombre: 'Bicicleta spinning Pro', sku: 'BIC-300', precio: 540000, stock: 1, min: 2 },
-  ];
-
-  const facturas = [
     {
-      id: 'f1', clienteId: 'c1', productoId: 'p1', cantidad: 1, monto: 335000, montoOriginal: 485000,
-      emision: daysAgoLocal(40), vencimiento: daysAgoLocal(10), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
-      pagos: [
-        {
-          id: 'p-seed-1',
-          monto: 150000,
-          fecha: daysAgoLocal(3),
-          nota: 'Pago demo del negocio',
-        },
-      ],
-      nota: '',
+      id: 'p1', nombre: 'Rack de sentadillas 4 postes', sku: 'RCK-004', numeroSerie: 'RCK-004-0001',
+      precio: 485000, stock: 3, min: 2,
+      monedaCosto: 'USD', costoCompra: 260, gastosAdicionales: 45, porcentajeImportacionChina: 15, tipoCambioRegistro: 535,
     },
     {
-      id: 'f2', clienteId: 'c2', productoId: 'p4', cantidad: 1, monto: 1250000, montoOriginal: 1250000,
-      emision: daysAgoLocal(35), vencimiento: daysAgoLocal(5), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
-      nota: 'Cliente solicitó extensión de 5 días',
+      id: 'p2', nombre: 'Banco plano profesional', sku: 'BNC-001', numeroSerie: 'BNC-001-0001',
+      precio: 95000, stock: 1, min: 3,
+      monedaCosto: 'CRC', costoCompra: 32000, gastosAdicionales: 4000, porcentajeImportacionChina: 10, tipoCambioRegistro: null,
     },
     {
-      id: 'f3', clienteId: 'c3', productoId: 'p7', cantidad: 3, monto: 414000, montoOriginal: 414000,
-      emision: daysAgoLocal(20), vencimiento: daysFromNowLocal(3), estadoPago: 'pendiente', tipoPago: paymentTypes.contado,
-      nota: '',
+      id: 'p3', nombre: 'Set mancuernas hex 5-25kg', sku: 'MAN-525', numeroSerie: 'MAN-525-0001',
+      precio: 620000, stock: 0, min: 2,
+      monedaCosto: 'USD', costoCompra: 420, gastosAdicionales: 60, porcentajeImportacionChina: 12, tipoCambioRegistro: 535,
     },
     {
-      id: 'f4', clienteId: 'c4', productoId: 'p6', cantidad: 2, monto: 430000, montoOriginal: 430000,
-      emision: daysAgoLocal(15), vencimiento: daysFromNowLocal(12), estadoPago: 'pendiente', tipoPago: paymentTypes.contado,
-      nota: '',
+      id: 'p4', nombre: 'Caminadora eléctrica T200', sku: 'TRD-200', numeroSerie: 'TRD-200-0001',
+      precio: 1250000, stock: 4, min: 2,
+      monedaCosto: 'USD', costoCompra: 780, gastosAdicionales: 120, porcentajeImportacionChina: 18, tipoCambioRegistro: 535,
+      fechaVidaUtil: daysAgoLocal(5),
     },
     {
-      id: 'f5', clienteId: 'c5', productoId: 'p5', cantidad: 1, monto: 780000, montoOriginal: 780000,
-      emision: daysAgoLocal(50), vencimiento: daysAgoLocal(28), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
-      nota: 'Tercer recordatorio enviado',
+      id: 'p5', nombre: 'Polea de cable funcional', sku: 'POL-001', numeroSerie: 'POL-001-0001',
+      precio: 780000, stock: 2, min: 1,
+      monedaCosto: 'USD', costoCompra: 480, gastosAdicionales: 70, porcentajeImportacionChina: 15, tipoCambioRegistro: 535,
+      fechaVidaUtil: daysFromNowLocal(20),
     },
     {
-      id: 'f6', clienteId: 'c1', productoId: 'p2', cantidad: 2, monto: 190000, montoOriginal: 190000,
-      emision: daysAgoLocal(60), vencimiento: daysAgoLocal(30), estadoPago: 'pagado', fechaPago: daysAgoLocal(32), tipoPago: paymentTypes.contado,
-      nota: '',
+      id: 'p6', nombre: 'Plataforma de levantamiento', sku: 'PLT-010', numeroSerie: 'PLT-010-0001',
+      precio: 215000, stock: 6, min: 2,
+      monedaCosto: 'CRC', costoCompra: 95000, gastosAdicionales: 8000, porcentajeImportacionChina: 8, tipoCambioRegistro: null,
     },
     {
-      id: 'f7', clienteId: 'c2', productoId: 'p7', cantidad: 5, monto: 690000, montoOriginal: 690000,
-      emision: daysAgoLocal(70), vencimiento: daysAgoLocal(40), estadoPago: 'pagado', fechaPago: daysAgoLocal(42), tipoPago: paymentTypes.contado,
-      nota: '',
+      id: 'p7', nombre: 'Barra olímpica 20kg', sku: 'BAR-020', numeroSerie: 'BAR-020-0001',
+      precio: 138000, stock: 9, min: 4,
+      monedaCosto: 'CRC', costoCompra: 55000, gastosAdicionales: 5000, porcentajeImportacionChina: 10, tipoCambioRegistro: null,
     },
     {
-      id: 'f8', clienteId: 'c3', productoId: 'p3', cantidad: 1, monto: 620000, montoOriginal: 620000,
-      emision: daysAgoLocal(5), vencimiento: daysFromNowLocal(25), estadoPago: 'pendiente', tipoPago: paymentTypes.credito,
-      nota: '',
+      id: 'p8', nombre: 'Bicicleta spinning Pro', sku: 'BIC-300', numeroSerie: 'BIC-300-0001',
+      precio: 540000, stock: 1, min: 2,
+      monedaCosto: 'USD', costoCompra: 300, gastosAdicionales: 40, porcentajeImportacionChina: 15, tipoCambioRegistro: 535,
+      fechaVidaUtil: daysFromNowLocal(400),
     },
   ];
 
-  return { clientes, productos, facturas, nextFacturaId: 9, nextProductoId: 9, nextClienteId: 6 };
+  const facturas = [];
+
+  return { clientes, productos, facturas, nextFacturaId: 1, nextProductoId: 9, nextClienteId: 6 };
+}
+
+function normalizeProduct(producto) {
+  return {
+    ...producto,
+    numeroSerie: producto.numeroSerie || '',
+    monedaVenta: producto.monedaVenta || monedas.crc,
+    precioVentaOriginal: producto.precioVentaOriginal != null ? Number(producto.precioVentaOriginal) : Number(producto.precio) || 0,
+    monedaCosto: producto.monedaCosto || monedas.crc,
+    costoCompra: Number(producto.costoCompra) || 0,
+    gastosAdicionales: Number(producto.gastosAdicionales) || 0,
+    porcentajeImportacionChina: Number(producto.porcentajeImportacionChina) || 0,
+    tipoCambioRegistro: producto.tipoCambioRegistro != null ? Number(producto.tipoCambioRegistro) : null,
+    fechaVidaUtil: producto.fechaVidaUtil ? new Date(producto.fechaVidaUtil) : null,
+  };
+}
+
+export function gananciaProducto(p) {
+  const costoCRC = convertToCRC(p.costoCompra, p.monedaCosto, p.tipoCambioRegistro);
+  const gastosAdicionalesCRC = convertToCRC(p.gastosAdicionales, p.monedaCosto, p.tipoCambioRegistro);
+  const gastosImportacionCRC = Math.round(costoCRC * (Number(p.porcentajeImportacionChina) || 0) / 100);
+  const gastosTotalCRC = gastosAdicionalesCRC + gastosImportacionCRC;
+  const ventaCRC = Number(p.precio) || 0;
+  return {
+    costoCRC,
+    gastosAdicionalesCRC,
+    gastosImportacionCRC,
+    gastosTotalCRC,
+    ventaCRC,
+    ganancia: ventaCRC - costoCRC - gastosTotalCRC,
+  };
+}
+
+export function estadoVidaUtil(p) {
+  if (!p.fechaVidaUtil) return null;
+  const dias = isoDays(p.fechaVidaUtil);
+  if (dias < 0) return 'vencida';
+  if (dias <= 30) return 'por_vencer';
+  return 'vigente';
+}
+
+export function serieDuplicada(numeroSerie, excludeId) {
+  const value = (numeroSerie || '').trim().toLowerCase();
+  if (!value) return false;
+  return state.productos.some(p => p.id !== excludeId && (p.numeroSerie || '').trim().toLowerCase() === value);
 }
 
 function normalizeInvoice(invoice) {
@@ -159,16 +203,18 @@ export function loadState() {
   }
 
   if (!raw) {
-    return seedData();
+    const seeded = seedData();
+    return { ...seeded, productos: seeded.productos.map(normalizeProduct) };
   }
 
   try {
     const parsed = JSON.parse(raw);
     const facturas = (parsed.facturas || []).map(normalizeInvoice);
+    const productos = (parsed.productos || []).map(normalizeProduct);
 
     return {
       clientes: parsed.clientes || [],
-      productos: parsed.productos || [],
+      productos,
       facturas,
       nextFacturaId: parsed.nextFacturaId || 1,
       nextProductoId: parsed.nextProductoId || 1,
@@ -183,7 +229,10 @@ export function loadState() {
 export function serializeState() {
   return JSON.stringify({
     clientes: state.clientes,
-    productos: state.productos,
+    productos: state.productos.map(p => ({
+      ...p,
+      fechaVidaUtil: p.fechaVidaUtil instanceof Date ? p.fechaVidaUtil.toISOString() : (p.fechaVidaUtil || null),
+    })),
     facturas: state.facturas.map(f => ({
       ...f,
       emision: f.emision instanceof Date ? f.emision.toISOString() : f.emision,
@@ -246,6 +295,12 @@ export function createFactura({ clienteId, productoId, cantidad, monto, vencimie
   };
   state.facturas.push(factura);
   state.nextFacturaId += 1;
+
+  const producto = productoById(productoId);
+  if (producto) {
+    producto.stock = Math.max(0, (Number(producto.stock) || 0) - (Number(cantidad) || 0));
+  }
+
   saveState();
   return factura;
 }

@@ -17,6 +17,10 @@ import {
   registrarPago,
   AUTH_KEY,
   findPortalUserByUsername,
+  convertToCRC,
+  gananciaProducto,
+  estadoVidaUtil,
+  serieDuplicada,
 } from './state.js';
 
 function query(id) {
@@ -63,6 +67,11 @@ function syncPaymentType() {
       vencimientoInput.value = toDateInputValue(daysFromNowLocal(15));
     }
   }
+}
+
+function syncMonedaProducto() {
+  const necesitaTipoCambio = query('ipMonedaVenta').value === 'USD' || query('ipMonedaCosto').value === 'USD';
+  query('ipTipoCambioWrap').style.display = necesitaTipoCambio ? 'block' : 'none';
 }
 
 function getFacturaPagos(factura) {
@@ -251,11 +260,17 @@ function renderInventario() {
     if (p.stock === 0) barColor = 'var(--danger-bright)';
     else if (p.stock <= p.min) barColor = 'var(--warn)';
 
-    return `<div class="inv-card">
+    const ganancia = gananciaProducto(p);
+    const vidaUtil = estadoVidaUtil(p);
+    const vidaUtilHtml = vidaUtil === 'vencida'
+      ? '<span class="inv-stock-badge stock-out">Vida útil vencida</span>'
+      : (vidaUtil === 'por_vencer' ? '<span class="inv-stock-badge stock-low">Vida útil por vencer</span>' : '');
+
+    return `<div class="inv-card" data-id="${p.id}" style="cursor:pointer;">
         <div class="inv-card-top">
           <div>
             <div class="inv-name">${p.nombre}</div>
-            <div class="inv-sku">${p.sku}</div>
+            <div class="inv-sku">${p.sku}${p.numeroSerie ? ' · S/N ' + p.numeroSerie : ''}</div>
           </div>
           <span class="inv-stock-badge ${badgeCls}">${badgeText}</span>
         </div>
@@ -264,8 +279,17 @@ function renderInventario() {
           <span>${p.stock} unidad${p.stock === 1 ? '' : 'es'} · mín ${p.min}</span>
           <span class="price">${fmt(p.precio)}</span>
         </div>
+        <div class="inv-meta" style="margin-top:6px;">
+          <span>Costo: ${fmt(ganancia.costoCRC)} · Gastos: ${fmt(ganancia.gastosTotalCRC)}</span>
+          <span style="color:${ganancia.ganancia >= 0 ? 'var(--ok)' : 'var(--danger-bright)'};">Ganancia: ${fmt(ganancia.ganancia)}</span>
+        </div>
+        ${vidaUtilHtml ? `<div style="margin-top:6px;">${vidaUtilHtml}</div>` : ''}
       </div>`;
   }).join('');
+
+  grid.querySelectorAll('.inv-card').forEach(card => {
+    card.addEventListener('click', () => openProductoModal(card.dataset.id));
+  });
 }
 
 function renderClientes() {
@@ -356,6 +380,7 @@ const modalDeleteCliente = query('modalDeleteCliente');
 let pagoFacturaId = null;
 let editingClienteId = null;
 let deletingClienteId = null;
+let editingProductoId = null;
 
 function populateSelects() {
   query('fCliente').innerHTML = state.clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
@@ -406,17 +431,31 @@ function closePagoModal() {
   pagoFacturaId = null;
 }
 
-function openProductoModal() {
-  query('ipNombre').value = '';
-  query('ipSku').value = '';
-  query('ipPrecio').value = '';
-  query('ipStock').value = '';
-  query('ipMin').value = '';
+function openProductoModal(productoId) {
+  editingProductoId = productoId || null;
+  const p = editingProductoId ? productoById(editingProductoId) : null;
+
+  query('modalProductoTitle').textContent = p ? 'Editar producto' : 'Nuevo producto';
+  query('ipNombre').value = p ? p.nombre : '';
+  query('ipSku').value = p ? p.sku : '';
+  query('ipSerie').value = p ? (p.numeroSerie || '') : '';
+  query('ipMonedaVenta').value = p ? p.monedaVenta : 'CRC';
+  query('ipPrecio').value = p ? p.precioVentaOriginal : '';
+  query('ipMonedaCosto').value = p ? p.monedaCosto : 'CRC';
+  query('ipCosto').value = p ? p.costoCompra : '';
+  query('ipTipoCambio').value = p && p.tipoCambioRegistro ? p.tipoCambioRegistro : '';
+  query('ipGastos').value = p ? p.gastosAdicionales : '';
+  query('ipImportacionPct').value = p ? p.porcentajeImportacionChina : '';
+  query('ipVidaUtil').value = p ? toDateInputValue(p.fechaVidaUtil) : '';
+  query('ipStock').value = p ? p.stock : '';
+  query('ipMin').value = p ? p.min : '';
+  syncMonedaProducto();
   modalProducto.style.display = 'flex';
 }
 
 function closeProductoModal() {
   modalProducto.style.display = 'none';
+  editingProductoId = null;
 }
 
 function openClienteModal(clienteId) {
@@ -701,6 +740,12 @@ function setupEventListeners() {
     if (!monto || monto <= 0) { alert('Ingresá un monto válido.'); return; }
     if (!venc) { alert('Seleccioná una fecha de vencimiento.'); return; }
 
+    const producto = productoById(productoId);
+    if (producto && cantidad > producto.stock) {
+      const continuar = confirm(`Solo hay ${producto.stock} unidad${producto.stock === 1 ? '' : 'es'} en inventario y estás facturando ${cantidad}. ¿Deseás continuar de todos modos?`);
+      if (!continuar) return;
+    }
+
     createFactura({
       clienteId,
       productoId,
@@ -743,26 +788,60 @@ function setupEventListeners() {
   query('saveProducto').addEventListener('click', () => {
     const nombre = query('ipNombre').value.trim();
     const sku = query('ipSku').value.trim();
-    const precio = Number(query('ipPrecio').value);
+    const numeroSerie = query('ipSerie').value.trim();
+    const monedaVenta = query('ipMonedaVenta').value;
+    const precioInput = Number(query('ipPrecio').value);
+    const monedaCosto = query('ipMonedaCosto').value;
+    const costoInput = Number(query('ipCosto').value) || 0;
+    const tipoCambioInput = Number(query('ipTipoCambio').value) || 0;
+    const gastosInput = Number(query('ipGastos').value) || 0;
+    const importPctInput = Number(query('ipImportacionPct').value) || 0;
+    const vidaUtilInput = query('ipVidaUtil').value;
     const stock = Number(query('ipStock').value);
     const min = Number(query('ipMin').value);
 
     if (!nombre) { alert('Ingresá el nombre del producto.'); return; }
-    if (!precio || precio <= 0) { alert('Ingresá un precio válido.'); return; }
+    if (!precioInput || precioInput <= 0) { alert('Ingresá un precio de venta válido.'); return; }
+    if ((monedaVenta === 'USD' || monedaCosto === 'USD') && tipoCambioInput <= 0) {
+      alert('Ingresá el tipo de cambio del BCCR del día para convertir el monto en dólares.');
+      return;
+    }
+    if (numeroSerie && serieDuplicada(numeroSerie, editingProductoId)) {
+      alert('Ya existe un producto registrado con ese número de serie.');
+      return;
+    }
 
-    state.productos.push({
-      id: 'p' + state.nextProductoId,
+    const tipoCambioRegistro = (monedaVenta === 'USD' || monedaCosto === 'USD') ? tipoCambioInput : null;
+    const datosProducto = {
       nombre,
       sku: sku || ('SKU-' + state.nextProductoId),
-      precio,
+      numeroSerie,
+      precio: convertToCRC(precioInput, monedaVenta, tipoCambioRegistro),
+      precioVentaOriginal: precioInput,
+      monedaVenta,
+      monedaCosto,
+      costoCompra: costoInput,
+      gastosAdicionales: gastosInput,
+      porcentajeImportacionChina: importPctInput,
+      tipoCambioRegistro,
+      fechaVidaUtil: vidaUtilInput ? parseDateInputValue(vidaUtilInput) : null,
       stock: stock || 0,
       min: min || 0,
-    });
-    state.nextProductoId += 1;
+    };
+
+    if (editingProductoId) {
+      const p = productoById(editingProductoId);
+      if (p) Object.assign(p, datosProducto);
+    } else {
+      state.productos.push({ id: 'p' + state.nextProductoId, ...datosProducto });
+      state.nextProductoId += 1;
+    }
     closeProductoModal();
     renderAll();
   });
 
+  query('ipMonedaVenta').addEventListener('change', syncMonedaProducto);
+  query('ipMonedaCosto').addEventListener('change', syncMonedaProducto);
   query('closeModalProducto').addEventListener('click', closeProductoModal);
   query('cancelProducto').addEventListener('click', closeProductoModal);
   modalProducto.addEventListener('click', (e) => { if (e.target === modalProducto) closeProductoModal(); });

@@ -1557,7 +1557,7 @@
   <div class="modal-overlay" id="modalProducto" style="display:none;">
     <div class="modal">
       <div class="modal-head">
-        <h3>Nuevo producto</h3>
+        <h3 id="modalProductoTitle">Nuevo producto</h3>
         <button class="modal-close" id="closeModalProducto">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 6L6 18M6 6l12 12" />
@@ -1575,9 +1575,53 @@
             <input type="text" id="ipSku" placeholder="Ej: RCK-004">
           </div>
           <div class="field">
-            <label>Precio unitario (₡)</label>
+            <label>Número de serie</label>
+            <input type="text" id="ipSerie" placeholder="Ej: SN-2026-001">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Moneda de venta</label>
+            <select id="ipMonedaVenta">
+              <option value="CRC">Colones (₡)</option>
+              <option value="USD">Dólares ($)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Precio de venta</label>
             <input type="number" id="ipPrecio" placeholder="0">
           </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Moneda de costo</label>
+            <select id="ipMonedaCosto">
+              <option value="CRC">Colones (₡)</option>
+              <option value="USD">Dólares ($)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Costo real de compra</label>
+            <input type="number" id="ipCosto" placeholder="0">
+          </div>
+        </div>
+        <div class="field" id="ipTipoCambioWrap" style="display:none;">
+          <label>Tipo de cambio del día (BCCR)</label>
+          <input type="number" id="ipTipoCambio" placeholder="Ej: 520.50" step="0.01">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Gastos adicionales</label>
+            <input type="number" id="ipGastos" placeholder="0">
+          </div>
+          <div class="field">
+            <label>% gastos importación China</label>
+            <input type="number" id="ipImportacionPct" placeholder="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>Vida útil (fecha límite, opcional)</label>
+          <input type="date" id="ipVidaUtil">
         </div>
         <div class="field-row">
           <div class="field">
