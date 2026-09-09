@@ -381,16 +381,108 @@ let pagoFacturaId = null;
 let editingClienteId = null;
 let deletingClienteId = null;
 let editingProductoId = null;
+let facturaLineas = [];
+let facturaLineaSeq = 0;
 
 function populateSelects() {
   query('fCliente').innerHTML = state.clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-  query('fProducto').innerHTML = state.productos.map(p => `<option value="${p.id}" data-precio="${p.precio}">${p.nombre} — ${fmt(p.precio)}</option>`).join('');
+}
+
+function primerProductoConStock() {
+  const disponible = state.productos.find(p => p.stock > 0);
+  return disponible ? disponible.id : (state.productos[0] ? state.productos[0].id : null);
+}
+
+function productoOptionsHtml(selectedId) {
+  return state.productos.map(p => {
+    const sinStock = p.stock <= 0;
+    const label = sinStock ? `${p.nombre} — Agotado` : `${p.nombre} — ${fmt(p.precio)} (${p.stock} disp.)`;
+    return `<option value="${p.id}" ${sinStock ? 'disabled' : ''} ${p.id === selectedId ? 'selected' : ''}>${label}</option>`;
+  }).join('');
+}
+
+function nuevaLineaFactura() {
+  facturaLineaSeq += 1;
+  const productoId = primerProductoConStock();
+  const producto = productoId ? productoById(productoId) : null;
+  const cantidad = producto && producto.stock > 0 ? 1 : 0;
+  return {
+    id: facturaLineaSeq,
+    productoId,
+    cantidad,
+    monto: producto ? producto.precio * cantidad : 0,
+  };
+}
+
+function updateFacturaTotal() {
+  const total = facturaLineas.reduce((sum, l) => sum + (Number(l.monto) || 0), 0);
+  query('facturaTotal').textContent = `Total: ${fmt(total)}`;
+}
+
+function renderFacturaLineas() {
+  const wrap = query('facturaLineas');
+  wrap.innerHTML = facturaLineas.map(linea => {
+    const producto = linea.productoId ? productoById(linea.productoId) : null;
+    const sinStock = !producto || producto.stock <= 0;
+    const warningHtml = sinStock
+      ? '<div class="fl-warning">Sin unidades disponibles para este producto.</div>'
+      : '';
+    return `<div class="factura-linea" data-linea="${linea.id}">
+        <select class="fl-producto">${productoOptionsHtml(linea.productoId)}</select>
+        <input type="number" class="fl-cantidad" value="${linea.cantidad}" min="0" max="${producto ? producto.stock : 0}" ${sinStock ? 'disabled' : ''}>
+        <input type="number" class="fl-monto" value="${linea.monto}" placeholder="0">
+        <button type="button" class="icon-btn fl-remove" title="Quitar producto" ${facturaLineas.length <= 1 ? 'disabled' : ''}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+        ${warningHtml}
+      </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.factura-linea').forEach(row => {
+    const lineaId = Number(row.dataset.linea);
+    const linea = facturaLineas.find(l => l.id === lineaId);
+    if (!linea) return;
+
+    row.querySelector('.fl-producto').addEventListener('change', (e) => {
+      const producto = productoById(e.target.value);
+      linea.productoId = e.target.value;
+      linea.cantidad = producto && producto.stock > 0 ? 1 : 0;
+      linea.monto = producto ? producto.precio * linea.cantidad : 0;
+      renderFacturaLineas();
+    });
+
+    row.querySelector('.fl-cantidad').addEventListener('input', (e) => {
+      const producto = productoById(linea.productoId);
+      const stockDisponible = producto ? producto.stock : 0;
+      let cantidad = Number(e.target.value) || 0;
+      if (cantidad > stockDisponible) cantidad = stockDisponible;
+      if (cantidad < 0) cantidad = 0;
+      e.target.value = cantidad;
+      linea.cantidad = cantidad;
+      linea.monto = producto ? producto.precio * cantidad : 0;
+      row.querySelector('.fl-monto').value = linea.monto;
+      updateFacturaTotal();
+    });
+
+    row.querySelector('.fl-monto').addEventListener('input', (e) => {
+      linea.monto = Number(e.target.value) || 0;
+      updateFacturaTotal();
+    });
+
+    row.querySelector('.fl-remove').addEventListener('click', () => {
+      if (facturaLineas.length <= 1) return;
+      facturaLineas = facturaLineas.filter(l => l.id !== lineaId);
+      renderFacturaLineas();
+    });
+  });
+
+  updateFacturaTotal();
 }
 
 function openFacturaModal() {
   populateSelects();
-  query('fCantidad').value = 1;
-  query('fMonto').value = state.productos[0] ? state.productos[0].precio : '';
+  facturaLineas = [nuevaLineaFactura()];
+  renderFacturaLineas();
   getPaymentTypeSelect().value = paymentTypes.credito;
   query('fNota').value = '';
   syncPaymentType();
@@ -712,48 +804,33 @@ function setupEventListeners() {
   query('btnExport').addEventListener('click', exportarCsv);
   query('btnNewCliente').addEventListener('click', () => openClienteModal(null));
 
-  query('fProducto').addEventListener('change', (e) => {
-    const opt = e.target.selectedOptions[0];
-    const precio = Number(opt.dataset.precio);
-    const cant = Number(query('fCantidad').value) || 1;
-    query('fMonto').value = precio * cant;
-  });
-  query('fCantidad').addEventListener('input', (e) => {
-    const sel = query('fProducto');
-    const opt = sel.selectedOptions[0];
-    if (!opt) return;
-    const precio = Number(opt.dataset.precio);
-    const cant = Number(e.target.value) || 1;
-    query('fMonto').value = precio * cant;
+  query('btnAgregarLinea').addEventListener('click', () => {
+    facturaLineas.push(nuevaLineaFactura());
+    renderFacturaLineas();
   });
   getPaymentTypeSelect().addEventListener('change', syncPaymentType);
 
   query('saveFactura').addEventListener('click', () => {
     const clienteId = query('fCliente').value;
-    const productoId = query('fProducto').value;
-    const cantidad = Number(query('fCantidad').value) || 1;
-    const monto = Number(query('fMonto').value);
     const venc = query('fVencimiento').value;
     const nota = query('fNota').value.trim();
     const tipoPago = getPaymentTypeSelect().value;
 
-    if (!monto || monto <= 0) { alert('Ingresá un monto válido.'); return; }
     if (!venc) { alert('Seleccioná una fecha de vencimiento.'); return; }
 
-    const producto = productoById(productoId);
-    if (producto && cantidad > producto.stock) {
-      const continuar = confirm(`Solo hay ${producto.stock} unidad${producto.stock === 1 ? '' : 'es'} en inventario y estás facturando ${cantidad}. ¿Deseás continuar de todos modos?`);
-      if (!continuar) return;
-    }
+    const lineasValidas = facturaLineas.filter(l => l.productoId && l.cantidad > 0 && l.monto > 0);
+    if (lineasValidas.length === 0) { alert('Agregá al menos un producto con cantidad y monto válidos.'); return; }
 
-    createFactura({
-      clienteId,
-      productoId,
-      cantidad,
-      monto,
-      vencimiento: parseDateInputValue(venc),
-      nota,
-      tipoPago,
+    lineasValidas.forEach(linea => {
+      createFactura({
+        clienteId,
+        productoId: linea.productoId,
+        cantidad: linea.cantidad,
+        monto: linea.monto,
+        vencimiento: parseDateInputValue(venc),
+        nota,
+        tipoPago,
+      });
     });
 
     closeFacturaModal();

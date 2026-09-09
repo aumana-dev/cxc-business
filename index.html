@@ -770,6 +770,49 @@
       gap: 12px;
     }
 
+    .factura-linea {
+      display: grid;
+      grid-template-columns: 2fr 84px 120px 34px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .factura-linea select,
+    .factura-linea input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: var(--bone);
+      font-size: 13px;
+      outline: none;
+      width: 100%;
+    }
+
+    .factura-linea select:disabled,
+    .factura-linea input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .factura-linea .icon-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .factura-linea .fl-warning {
+      grid-column: 1 / -1;
+      font-size: 11px;
+      color: var(--warn);
+      margin: -4px 0 2px;
+    }
+
+    select option:disabled {
+      color: #6b6f78;
+      font-style: italic;
+    }
+
     .modal-foot {
       padding: 18px 24px;
       border-top: 1px solid var(--border);
@@ -1431,37 +1474,35 @@
           <label>Cliente</label>
           <select id="fCliente"></select>
         </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Producto</label>
-            <select id="fProducto"></select>
-          </div>
-          <div class="field">
-            <label>Cantidad</label>
-            <input type="number" id="fCantidad" value="1" min="1">
-          </div>
+        <div class="field">
+          <label>Productos</label>
+          <div id="facturaLineas"></div>
+          <button type="button" class="btn btn-ghost" id="btnAgregarLinea"
+            style="width:100%; justify-content:center; margin-top:4px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Agregar producto
+          </button>
         </div>
         <div class="field-row">
-          <div class="field">
-            <label>Monto total (₡)</label>
-            <input type="number" id="fMonto" placeholder="0">
-          </div>
           <div class="field">
             <label>Fecha de vencimiento</label>
             <input type="date" id="fVencimiento">
           </div>
-        </div>
-        <div class="field">
-          <label>Tipo de pago</label>
-          <select id="fTipoPago">
-            <option value="credito">Crédito</option>
-            <option value="contado">Contado</option>
-          </select>
+          <div class="field">
+            <label>Tipo de pago</label>
+            <select id="fTipoPago">
+              <option value="credito">Crédito</option>
+              <option value="contado">Contado</option>
+            </select>
+          </div>
         </div>
         <div class="field">
           <label>Nota (opcional)</label>
           <textarea id="fNota" rows="2" placeholder="Ej: pago en 2 partes, anticipo recibido..."></textarea>
         </div>
+        <div id="facturaTotal" style="font-size:13.5px; color:var(--bone); font-weight:600; text-align:right;"></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelFactura">Cancelar</button>
