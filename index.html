@@ -1682,6 +1682,51 @@
     </div>
   </div>
 
+  <!-- ===== MODAL: DETALLE DE FACTURA ===== -->
+  <div class="modal-overlay" id="modalDetalleFactura" style="display:none;">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-head">
+        <h3 id="detalleFacturaTitle">Factura</h3>
+        <button class="modal-close" id="closeModalDetalleFactura">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="detalleFacturaInfo" style="font-size:13.5px; color:var(--bone-dim); line-height:1.7;"></div>
+        <div id="detalleFacturaHistorial"
+          style="margin-top:14px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); font-size:12px; color:var(--bone-dim);">
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="closeDetalleFactura">Cerrar</button>
+        <button class="btn btn-primary" id="detalleFacturaPagar">Registrar pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: HISTORIAL DE CLIENTE ===== -->
+  <div class="modal-overlay" id="modalHistorialCliente" style="display:none;">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-head">
+        <h3 id="historialClienteTitle">Cliente</h3>
+        <button class="modal-close" id="closeModalHistorialCliente">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="historialClienteResumen" style="font-size:13px; color:var(--bone-dim); margin-bottom:12px;"></div>
+        <div class="portal-list" id="historialClienteLista"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="closeHistorialCliente">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="save-indicator" id="saveIndicator"><span class="dot"></span>Guardado</div>
 
   <script>

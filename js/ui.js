@@ -190,7 +190,7 @@ function renderTablaCxc() {
     const c = clienteById(f.clienteId);
     const p = productoById(f.productoId);
     const estado = estadoFactura(f);
-    return `<tr>
+    return `<tr data-id="${f.id}" style="cursor:pointer;">
             <td>
               <div class="client-name">${c ? c.nombre : '—'}</div>
               <div class="client-sub">${c ? c.contacto : ''}</div>
@@ -216,8 +216,14 @@ function renderTablaCxc() {
       </tbody>
     </table>`;
 
+  wrap.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', () => openDetalleFacturaModal(tr.dataset.id));
+  });
   wrap.querySelectorAll('[data-action="pagar"]').forEach(btn => {
-    btn.addEventListener('click', () => openPagoModal(btn.dataset.id));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openPagoModal(btn.dataset.id);
+    });
   });
 }
 
@@ -313,7 +319,7 @@ function renderClientes() {
     const totalPagado = fs.reduce((s, f) => s + getFacturaPagadoTotal(f), 0);
     const tieneVencido = pendientes.some(f => estadoFactura(f) === 'vencido');
     const estado = pendientes.length === 0 ? 'al_dia' : (tieneVencido ? 'vencido' : 'al_dia');
-    return `<tr>
+    return `<tr data-id="${c.id}" style="cursor:pointer;">
             <td class="client-name">${c.nombre}</td>
             <td class="mono">${c.contacto || '—'}</td>
             <td>${pendientes.length}</td>
@@ -335,11 +341,14 @@ function renderClientes() {
       </tbody>
     </table>`;
 
+  wrap.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', () => openHistorialClienteModal(tr.dataset.id));
+  });
   wrap.querySelectorAll('[data-action="editar-cliente"]').forEach(btn => {
-    btn.addEventListener('click', () => openClienteModal(btn.dataset.id));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openClienteModal(btn.dataset.id); });
   });
   wrap.querySelectorAll('[data-action="eliminar-cliente"]').forEach(btn => {
-    btn.addEventListener('click', () => openDeleteClienteModal(btn.dataset.id));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openDeleteClienteModal(btn.dataset.id); });
   });
 }
 
@@ -377,10 +386,14 @@ const modalPago = query('modalPago');
 const modalProducto = query('modalProducto');
 const modalCliente = query('modalCliente');
 const modalDeleteCliente = query('modalDeleteCliente');
+const modalDetalleFactura = query('modalDetalleFactura');
+const modalHistorialCliente = query('modalHistorialCliente');
 let pagoFacturaId = null;
 let editingClienteId = null;
 let deletingClienteId = null;
 let editingProductoId = null;
+let detalleFacturaId = null;
+let historialClienteId = null;
 let facturaLineas = [];
 let facturaLineaSeq = 0;
 
@@ -508,7 +521,6 @@ function openPagoModal(facturaId) {
 
   query('pagoInfo').innerHTML = `
     <strong style="color:var(--bone)">${c ? c.nombre : 'Cliente'}</strong> — ${p ? p.nombre : 'Producto'}<br>
-  const totalPagado = facturas.reduce((sum, f) => sum + getFacturaPagadoTotal(f), 0);
     Saldo pendiente: <span class="mono" style="color:var(--rust-bright); font-weight:700;">${fmt(saldoActual)}</span><br>
     Total pagado: <span class="mono" style="color:var(--ok);">${fmt(totalPagado)}</span><br>
     <span style="color:var(--bone-dim);">Si el monto cubre el saldo total, la factura se cerrará y quedará registrada en historial.</span>`;
@@ -586,6 +598,88 @@ function openDeleteClienteModal(clienteId) {
 function closeDeleteClienteModal() {
   modalDeleteCliente.style.display = 'none';
   deletingClienteId = null;
+}
+
+function openDetalleFacturaModal(facturaId) {
+  const f = state.facturas.find(x => x.id === facturaId);
+  if (!f) return;
+  detalleFacturaId = facturaId;
+
+  const c = clienteById(f.clienteId);
+  const p = productoById(f.productoId);
+  const estado = f.estadoPago === 'pagado' ? 'pagado' : estadoFactura(f);
+  const pagos = getFacturaPagos(f);
+  const totalPagado = getFacturaPagadoTotal(f);
+
+  query('detalleFacturaTitle').textContent = `Factura ${f.id}`;
+  query('detalleFacturaInfo').innerHTML = `
+    <strong style="color:var(--bone);">${c ? c.nombre : 'Cliente'}</strong><br>
+    Producto: ${p ? p.nombre : '—'} × ${f.cantidad}<br>
+    Tipo de pago: ${invoicePaymentLabel(f.tipoPago)}<br>
+    Emisión: ${f.emision.toLocaleDateString('es-CR')} · Vencimiento: ${f.vencimiento.toLocaleDateString('es-CR')}<br>
+    Estado: ${statusPillHtml(estado)}<br>
+    Monto original: <span class="mono">${fmt(f.montoOriginal || f.monto)}</span><br>
+    Saldo pendiente: <span class="mono" style="color:var(--rust-bright); font-weight:700;">${fmt(f.monto)}</span><br>
+    Total pagado: <span class="mono" style="color:var(--ok);">${fmt(totalPagado)}</span>
+    ${f.nota ? `<br>Nota: ${f.nota}` : ''}`;
+
+  const historialHtml = pagos.length > 0
+    ? `<div style="display:grid; gap:6px;">${pagos.map(pago => `<div style="display:flex; justify-content:space-between; gap:8px; color:var(--bone);"><span>${pago.fecha ? new Date(pago.fecha).toLocaleDateString('es-CR') : 'Fecha no registrada'}</span><span class="mono">${fmt(Number(pago.monto) || 0)}</span></div>`).join('')}</div>`
+    : 'Aún no hay pagos registrados.';
+  query('detalleFacturaHistorial').innerHTML = `<div style="font-weight:600; color:var(--bone); margin-bottom:6px;">Historial de pagos</div>${historialHtml}`;
+
+  query('detalleFacturaPagar').style.display = f.estadoPago === 'pagado' ? 'none' : 'inline-flex';
+  modalDetalleFactura.style.display = 'flex';
+}
+
+function closeDetalleFacturaModal() {
+  modalDetalleFactura.style.display = 'none';
+  detalleFacturaId = null;
+}
+
+function openHistorialClienteModal(clienteId) {
+  const cliente = clienteById(clienteId);
+  if (!cliente) return;
+  historialClienteId = clienteId;
+
+  const facturas = state.facturas.filter(f => f.clienteId === clienteId).slice().sort((a, b) => b.emision - a.emision);
+  const pendientes = facturas.filter(f => f.estadoPago === 'pendiente');
+  const saldo = pendientes.reduce((s, f) => s + (Number(f.monto) || 0), 0);
+  const totalPagado = facturas.reduce((s, f) => s + getFacturaPagadoTotal(f), 0);
+
+  query('historialClienteTitle').textContent = cliente.nombre;
+  query('historialClienteResumen').innerHTML = `<strong style="color:var(--bone);">${pendientes.length}</strong> factura${pendientes.length === 1 ? '' : 's'} pendiente${pendientes.length === 1 ? '' : 's'} · Saldo: <span class="mono" style="color:var(--rust-bright); font-weight:700;">${fmt(saldo)}</span> · Total pagado: <span class="mono" style="color:var(--ok);">${fmt(totalPagado)}</span>`;
+
+  const lista = query('historialClienteLista');
+  if (facturas.length === 0) {
+    lista.innerHTML = '<div class="portal-empty">Este cliente todavía no tiene facturas.</div>';
+  } else {
+    lista.innerHTML = facturas.map(f => {
+      const p = productoById(f.productoId);
+      const estado = f.estadoPago === 'pagado' ? 'pagado' : estadoFactura(f);
+      return `<div class="portal-item" data-id="${f.id}" style="cursor:pointer;">
+        <div>
+          <strong>${p ? p.nombre : 'Producto'}</strong>
+          <div class="portal-item-sub">Factura ${f.id} · vence ${f.vencimiento.toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+        </div>
+        <div class="portal-item-balance">${fmt(f.monto)}<br>${statusPillHtml(estado)}</div>
+      </div>`;
+    }).join('');
+
+    lista.querySelectorAll('[data-id]').forEach(item => {
+      item.addEventListener('click', () => {
+        closeHistorialClienteModal();
+        openDetalleFacturaModal(item.dataset.id);
+      });
+    });
+  }
+
+  modalHistorialCliente.style.display = 'flex';
+}
+
+function closeHistorialClienteModal() {
+  modalHistorialCliente.style.display = 'none';
+  historialClienteId = null;
 }
 
 function downloadCsv(filename, rows) {
@@ -980,6 +1074,19 @@ function setupEventListeners() {
   query('closeModalDeleteCliente').addEventListener('click', closeDeleteClienteModal);
   query('cancelDeleteCliente').addEventListener('click', closeDeleteClienteModal);
   modalDeleteCliente.addEventListener('click', (e) => { if (e.target === modalDeleteCliente) closeDeleteClienteModal(); });
+
+  query('closeModalDetalleFactura').addEventListener('click', closeDetalleFacturaModal);
+  query('closeDetalleFactura').addEventListener('click', closeDetalleFacturaModal);
+  modalDetalleFactura.addEventListener('click', (e) => { if (e.target === modalDetalleFactura) closeDetalleFacturaModal(); });
+  query('detalleFacturaPagar').addEventListener('click', () => {
+    const facturaId = detalleFacturaId;
+    closeDetalleFacturaModal();
+    openPagoModal(facturaId);
+  });
+
+  query('closeModalHistorialCliente').addEventListener('click', closeHistorialClienteModal);
+  query('closeHistorialCliente').addEventListener('click', closeHistorialClienteModal);
+  modalHistorialCliente.addEventListener('click', (e) => { if (e.target === modalHistorialCliente) closeHistorialClienteModal(); });
 
   query('searchCxc').addEventListener('input', renderTablaCxc);
   query('filterEstado').addEventListener('change', renderTablaCxc);
