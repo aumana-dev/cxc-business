@@ -2,12 +2,16 @@
 
 Proyecto de cuentas por cobrar / inventario.
 
-## Estructura inicial
+## Estructura actual
 
-- `public/` — frontend estático
-- `public/index.html` — punto de entrada de la aplicación
-- `public/js/` — módulos de UI y estado
-- `server/` — servidor local para desarrollo
+- `index.html` — estructura de la aplicación y modales
+- `css/styles.css` — estilos de la aplicación
+- `js/app.js` — punto de entrada
+- `js/ui.js` — coordinación de vistas, eventos y renderizado
+- `js/state.js` — estado y persistencia local
+- `js/domain.js` — reglas de moneda, ganancia, vida útil y series
+- `js/invoice-form.js` — formulario de factura con varias líneas
+- `server/` — servidor local Express
 
 ## Ejecutar localmente
 
@@ -65,6 +69,7 @@ flowchart TD
 
 ## Notas
 
-- `server/index.js` sirve la carpeta `public/` como estática.
+- `server/index.js` sirve la raíz del proyecto como frontend estático.
+- Los datos actuales se guardan en `localStorage` del navegador bajo `fierro_data_v1`.
 - Si usas un live server directo en la raíz, la URL correcta es `http://localhost:3000/`.
-- Si tomas la carpeta como `http://localhost:3000/cxc-gimnasios/index.html`, fallará porque el archivo ya está en la raíz pública.
+- El siguiente paso de arquitectura será separar las áreas restantes de `ui.js` y después migrar el estado a una API y base de datos real.

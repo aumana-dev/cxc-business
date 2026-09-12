@@ -22,13 +22,10 @@ import {
   estadoVidaUtil,
   serieDuplicada,
 } from './state.js';
+import { createInvoiceForm } from './invoice-form.js';
 
 function query(id) {
   return document.getElementById(id);
-}
-
-function getPaymentTypeSelect() {
-  return query('fTipoPago');
 }
 
 function getStoredAuth() {
@@ -52,20 +49,6 @@ function clearStoredAuth() {
     sessionStorage.removeItem(AUTH_KEY);
   } catch (e) {
     // ignore storage issues
-  }
-}
-
-function syncPaymentType() {
-  const tipoPago = getPaymentTypeSelect().value;
-  const vencimientoInput = query('fVencimiento');
-  if (tipoPago === paymentTypes.contado) {
-    vencimientoInput.value = toDateInputValue(today);
-    vencimientoInput.disabled = true;
-  } else {
-    vencimientoInput.disabled = false;
-    if (!vencimientoInput.value) {
-      vencimientoInput.value = toDateInputValue(daysFromNowLocal(15));
-    }
   }
 }
 
@@ -144,13 +127,13 @@ function renderTablaCxc() {
   const search = query('searchCxc').value.trim().toLowerCase();
   const filtro = query('filterEstado').value;
 
-  let rows = state.facturas.filter(f => f.estadoPago !== 'pagado');
-  if (filtro === 'pagado') {
+  let rows = state.facturas;
+  if (filtro === 'pendientes') {
+    rows = state.facturas.filter(f => f.estadoPago === 'pendiente');
+  } else if (filtro === 'pagado') {
     rows = state.facturas.filter(f => f.estadoPago === 'pagado');
-  } else if (filtro === 'pendientes') {
-    rows = rows.filter(f => f.estadoPago === 'pendiente');
   } else if (filtro !== 'todos') {
-    rows = rows.filter(f => estadoFactura(f) === filtro);
+    rows = state.facturas.filter(f => estadoFactura(f) === filtro);
   }
   if (search) {
     rows = rows.filter(f => {
@@ -394,117 +377,20 @@ let deletingClienteId = null;
 let editingProductoId = null;
 let detalleFacturaId = null;
 let historialClienteId = null;
-let facturaLineas = [];
-let facturaLineaSeq = 0;
+const invoiceForm = createInvoiceForm({
+  query,
+  state,
+  fmt,
+  productoById,
+  toDateInputValue,
+  paymentTypes,
+  daysFromNowLocal,
+  today,
+  modalFactura,
+});
 
-function populateSelects() {
-  query('fCliente').innerHTML = state.clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-}
-
-function primerProductoConStock() {
-  const disponible = state.productos.find(p => p.stock > 0);
-  return disponible ? disponible.id : (state.productos[0] ? state.productos[0].id : null);
-}
-
-function productoOptionsHtml(selectedId) {
-  return state.productos.map(p => {
-    const sinStock = p.stock <= 0;
-    const label = sinStock ? `${p.nombre} — Agotado` : `${p.nombre} — ${fmt(p.precio)} (${p.stock} disp.)`;
-    return `<option value="${p.id}" ${sinStock ? 'disabled' : ''} ${p.id === selectedId ? 'selected' : ''}>${label}</option>`;
-  }).join('');
-}
-
-function nuevaLineaFactura() {
-  facturaLineaSeq += 1;
-  const productoId = primerProductoConStock();
-  const producto = productoId ? productoById(productoId) : null;
-  const cantidad = producto && producto.stock > 0 ? 1 : 0;
-  return {
-    id: facturaLineaSeq,
-    productoId,
-    cantidad,
-    monto: producto ? producto.precio * cantidad : 0,
-  };
-}
-
-function updateFacturaTotal() {
-  const total = facturaLineas.reduce((sum, l) => sum + (Number(l.monto) || 0), 0);
-  query('facturaTotal').textContent = `Total: ${fmt(total)}`;
-}
-
-function renderFacturaLineas() {
-  const wrap = query('facturaLineas');
-  wrap.innerHTML = facturaLineas.map(linea => {
-    const producto = linea.productoId ? productoById(linea.productoId) : null;
-    const sinStock = !producto || producto.stock <= 0;
-    const warningHtml = sinStock
-      ? '<div class="fl-warning">Sin unidades disponibles para este producto.</div>'
-      : '';
-    return `<div class="factura-linea" data-linea="${linea.id}">
-        <select class="fl-producto">${productoOptionsHtml(linea.productoId)}</select>
-        <input type="number" class="fl-cantidad" value="${linea.cantidad}" min="0" max="${producto ? producto.stock : 0}" ${sinStock ? 'disabled' : ''}>
-        <input type="number" class="fl-monto" value="${linea.monto}" placeholder="0">
-        <button type="button" class="icon-btn fl-remove" title="Quitar producto" ${facturaLineas.length <= 1 ? 'disabled' : ''}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-        ${warningHtml}
-      </div>`;
-  }).join('');
-
-  wrap.querySelectorAll('.factura-linea').forEach(row => {
-    const lineaId = Number(row.dataset.linea);
-    const linea = facturaLineas.find(l => l.id === lineaId);
-    if (!linea) return;
-
-    row.querySelector('.fl-producto').addEventListener('change', (e) => {
-      const producto = productoById(e.target.value);
-      linea.productoId = e.target.value;
-      linea.cantidad = producto && producto.stock > 0 ? 1 : 0;
-      linea.monto = producto ? producto.precio * linea.cantidad : 0;
-      renderFacturaLineas();
-    });
-
-    row.querySelector('.fl-cantidad').addEventListener('input', (e) => {
-      const producto = productoById(linea.productoId);
-      const stockDisponible = producto ? producto.stock : 0;
-      let cantidad = Number(e.target.value) || 0;
-      if (cantidad > stockDisponible) cantidad = stockDisponible;
-      if (cantidad < 0) cantidad = 0;
-      e.target.value = cantidad;
-      linea.cantidad = cantidad;
-      linea.monto = producto ? producto.precio * cantidad : 0;
-      row.querySelector('.fl-monto').value = linea.monto;
-      updateFacturaTotal();
-    });
-
-    row.querySelector('.fl-monto').addEventListener('input', (e) => {
-      linea.monto = Number(e.target.value) || 0;
-      updateFacturaTotal();
-    });
-
-    row.querySelector('.fl-remove').addEventListener('click', () => {
-      if (facturaLineas.length <= 1) return;
-      facturaLineas = facturaLineas.filter(l => l.id !== lineaId);
-      renderFacturaLineas();
-    });
-  });
-
-  updateFacturaTotal();
-}
-
-function openFacturaModal() {
-  populateSelects();
-  facturaLineas = [nuevaLineaFactura()];
-  renderFacturaLineas();
-  getPaymentTypeSelect().value = paymentTypes.credito;
-  query('fNota').value = '';
-  syncPaymentType();
-  modalFactura.style.display = 'flex';
-}
-
-function closeFacturaModal() {
-  modalFactura.style.display = 'none';
-}
+const openFacturaModal = invoiceForm.open;
+const closeFacturaModal = invoiceForm.close;
 
 function openPagoModal(facturaId) {
   pagoFacturaId = facturaId;
@@ -682,23 +568,31 @@ function closeHistorialClienteModal() {
   historialClienteId = null;
 }
 
-function downloadCsv(filename, rows) {
+function downloadExcel(filename, rows) {
   if (!rows || rows.length === 0) {
     alert('No hay datos para exportar.');
     return;
   }
-  const escapeCell = (value) => {
+  const escapeHtml = (value) => {
     if (value === null || value === undefined) return '';
-    const text = String(value).replace(/"/g, '""');
-    return /[",\n\r]/.test(text) ? `"${text}"` : text;
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   };
   const headers = Object.keys(rows[0]);
-  const csv = [
-    headers.map(escapeCell).join(','),
-    ...rows.map(row => headers.map(h => escapeCell(row[h])).join(','))
-  ].join('\r\n');
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const tableRows = [
+    `<tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join('')}</tr>`,
+    ...rows.map(row => `<tr>${headers.map(header => `<td>${escapeHtml(row[header])}</td>`).join('')}</tr>`),
+  ].join('');
+  const workbook = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    table { border-collapse: collapse; font-family: Arial, sans-serif; }
+    th { background: #1C1F25; color: #FFFFFF; font-weight: bold; }
+    th, td { border: 1px solid #B7B7B7; padding: 6px 9px; white-space: nowrap; }
+    td { mso-number-format: "\\@"; }
+  </style></head><body><table>${tableRows}</table></body></html>`;
+  const blob = new Blob([`\ufeff${workbook}`], { type: 'application/vnd.ms-excel' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = filename;
@@ -709,18 +603,22 @@ function downloadCsv(filename, rows) {
 }
 
 function exportarCsv() {
-  let filename = 'fierro_export.csv';
+  let filename = 'ebizu_export.xls';
   let rows = [];
 
   if (currentView === 'cxc') {
-    const pendientes = state.facturas.filter(f => f.estadoPago === 'pendiente');
+    const pendientes = state.facturas
+      .filter(f => f.estadoPago === 'pendiente')
+      .sort((a, b) => a.vencimiento - b.vencimiento);
     rows = pendientes.map(f => {
       const c = clienteById(f.clienteId);
       const p = productoById(f.productoId);
       return {
+        'Factura': f.id,
         'Cliente': c ? c.nombre : '',
         'Contacto': c ? c.contacto : '',
         'Producto': p ? p.nombre : '',
+        'Cantidad': f.cantidad,
         'Tipo de pago': invoicePaymentLabel(f.tipoPago),
         'Monto original': f.montoOriginal || f.monto,
         'Monto pendiente': f.monto,
@@ -730,37 +628,56 @@ function exportarCsv() {
         'Nota': f.nota || '',
       };
     });
-    filename = 'cuentas_por_cobrar.csv';
+    filename = 'ebizu_cuentas_por_cobrar.xls';
 
   } else if (currentView === 'inventario') {
-    rows = state.productos.map(p => ({
+    rows = state.productos.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(p => {
+      const ganancia = gananciaProducto(p);
+      return {
       'Producto': p.nombre,
       'SKU': p.sku,
-      'Precio unitario': p.precio,
+      'Número de serie': p.numeroSerie || '',
+      'Precio venta CRC': p.precio,
+      'Precio venta original': p.precioVentaOriginal,
+      'Moneda venta': p.monedaVenta,
+      'Costo compra': p.costoCompra,
+      'Moneda costo': p.monedaCosto,
+      'Tipo cambio registro': p.tipoCambioRegistro || '',
+      'Gastos adicionales CRC': ganancia.gastosAdicionalesCRC,
+      '% importación China': p.porcentajeImportacionChina,
+      'Gastos importación CRC': ganancia.gastosImportacionCRC,
+      'Gastos totales CRC': ganancia.gastosTotalCRC,
+      'Ganancia CRC': ganancia.ganancia,
       'Stock actual': p.stock,
       'Stock mínimo': p.min,
       'Valor en inventario': p.precio * p.stock,
       'Estado': p.stock === 0 ? 'Agotado' : (p.stock <= p.min ? 'Stock bajo' : 'En stock'),
-    }));
-    filename = 'inventario.csv';
+      'Vida útil': p.fechaVidaUtil ? p.fechaVidaUtil.toLocaleDateString('es-CR') : '',
+      };
+    });
+    filename = 'ebizu_inventario.xls';
 
   } else if (currentView === 'clientes') {
-    rows = state.clientes.map(c => {
+    rows = state.clientes.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(c => {
       const fs = state.facturas.filter(f => f.clienteId === c.id && f.estadoPago === 'pendiente');
       const saldo = fs.reduce((s, f) => s + f.monto, 0);
+      const facturasTotales = state.facturas.filter(f => f.clienteId === c.id);
+      const totalPagado = facturasTotales.reduce((s, f) => s + getFacturaPagadoTotal(f), 0);
       const tieneVencido = fs.some(f => estadoFactura(f) === 'vencido');
       return {
         'Cliente': c.nombre,
         'Contacto': c.contacto || '',
         'Facturas activas': fs.length,
+        'Facturas totales': facturasTotales.length,
         'Saldo pendiente': saldo,
+        'Total pagado': totalPagado,
         'Estado': fs.length === 0 ? 'Al día' : (tieneVencido ? 'Vencido' : 'Al día'),
       };
     });
-    filename = 'clientes.csv';
+    filename = 'ebizu_clientes.xls';
   }
 
-  downloadCsv(filename, rows);
+  downloadExcel(filename, rows);
 }
 
 function renderPortalView() {
@@ -898,21 +815,15 @@ function setupEventListeners() {
   query('btnExport').addEventListener('click', exportarCsv);
   query('btnNewCliente').addEventListener('click', () => openClienteModal(null));
 
-  query('btnAgregarLinea').addEventListener('click', () => {
-    facturaLineas.push(nuevaLineaFactura());
-    renderFacturaLineas();
-  });
-  getPaymentTypeSelect().addEventListener('change', syncPaymentType);
-
   query('saveFactura').addEventListener('click', () => {
     const clienteId = query('fCliente').value;
     const venc = query('fVencimiento').value;
     const nota = query('fNota').value.trim();
-    const tipoPago = getPaymentTypeSelect().value;
+    const tipoPago = query('fTipoPago').value;
 
     if (!venc) { alert('Seleccioná una fecha de vencimiento.'); return; }
 
-    const lineasValidas = facturaLineas.filter(l => l.productoId && l.cantidad > 0 && l.monto > 0);
+    const lineasValidas = invoiceForm.getLines().filter(l => l.productoId && l.cantidad > 0 && l.monto > 0);
     if (lineasValidas.length === 0) { alert('Agregá al menos un producto con cantidad y monto válidos.'); return; }
 
     lineasValidas.forEach(linea => {
@@ -930,10 +841,6 @@ function setupEventListeners() {
     closeFacturaModal();
     renderAll();
   });
-
-  query('closeModalFactura').addEventListener('click', closeFacturaModal);
-  query('cancelFactura').addEventListener('click', closeFacturaModal);
-  modalFactura.addEventListener('click', (e) => { if (e.target === modalFactura) closeFacturaModal(); });
 
   query('savePago').addEventListener('click', () => {
     const f = state.facturas.find(x => x.id === pagoFacturaId);

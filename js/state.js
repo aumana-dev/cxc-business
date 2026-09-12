@@ -1,3 +1,13 @@
+import {
+  monedas,
+  convertToCRC,
+  gananciaProducto,
+  estadoVidaUtil as calculateEstadoVidaUtil,
+  serieDuplicada as isSerieDuplicada,
+} from './domain.js';
+
+export { monedas, convertToCRC, gananciaProducto };
+
 export const STORAGE_KEY = 'fierro_data_v1';
 export const AUTH_KEY = 'fierro_auth_v1';
 export const portalUsers = [
@@ -23,19 +33,6 @@ today.setHours(0, 0, 0, 0);
 
 export function fmt(n) {
   return '₡' + Math.round(n).toLocaleString('es-CR');
-}
-
-export const monedas = {
-  crc: 'CRC',
-  usd: 'USD',
-};
-
-export function convertToCRC(amount, moneda, tipoCambio) {
-  const value = Number(amount) || 0;
-  if (moneda === monedas.usd) {
-    return Math.round(value * (Number(tipoCambio) || 0));
-  }
-  return Math.round(value);
 }
 
 export function isoDays(d) {
@@ -141,34 +138,12 @@ function normalizeProduct(producto) {
   };
 }
 
-export function gananciaProducto(p) {
-  const costoCRC = convertToCRC(p.costoCompra, p.monedaCosto, p.tipoCambioRegistro);
-  const gastosAdicionalesCRC = convertToCRC(p.gastosAdicionales, p.monedaCosto, p.tipoCambioRegistro);
-  const gastosImportacionCRC = Math.round(costoCRC * (Number(p.porcentajeImportacionChina) || 0) / 100);
-  const gastosTotalCRC = gastosAdicionalesCRC + gastosImportacionCRC;
-  const ventaCRC = Number(p.precio) || 0;
-  return {
-    costoCRC,
-    gastosAdicionalesCRC,
-    gastosImportacionCRC,
-    gastosTotalCRC,
-    ventaCRC,
-    ganancia: ventaCRC - costoCRC - gastosTotalCRC,
-  };
-}
-
 export function estadoVidaUtil(p) {
-  if (!p.fechaVidaUtil) return null;
-  const dias = isoDays(p.fechaVidaUtil);
-  if (dias < 0) return 'vencida';
-  if (dias <= 30) return 'por_vencer';
-  return 'vigente';
+  return calculateEstadoVidaUtil(p, today);
 }
 
 export function serieDuplicada(numeroSerie, excludeId) {
-  const value = (numeroSerie || '').trim().toLowerCase();
-  if (!value) return false;
-  return state.productos.some(p => p.id !== excludeId && (p.numeroSerie || '').trim().toLowerCase() === value);
+  return isSerieDuplicada(numeroSerie, excludeId, state.productos);
 }
 
 function normalizeInvoice(invoice) {
