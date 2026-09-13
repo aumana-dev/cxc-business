@@ -10,17 +10,40 @@ export { monedas, convertToCRC, gananciaProducto };
 
 export const STORAGE_KEY = 'fierro_data_v1';
 export const AUTH_KEY = 'fierro_auth_v1';
-export const portalUsers = [
-  {
-    username: 'gimnasio-titan',
-    password: 'Negocio2025',
-    clientId: 'c1',
-    label: 'Gimnasio Titán Pavas',
-  },
-];
+
+export const ADMIN_USERNAME = 'Cristian';
+export const ADMIN_PASSWORD_HASH = '9ecdc9d6b66049cbc1c9fd658c2284cbde6d0921ff64e67fe369611bebf07e45';
+
+export function seedPortalUsers() {
+  return [
+    {
+      username: 'gimnasio-titan',
+      passwordHash: 'a9004e774acb60851ed6826fd41dde8636cfc06471aedc25d3ce5230740db3a0',
+      clientId: 'c1',
+      label: 'Gimnasio Titán Pavas',
+      activo: true,
+    },
+  ];
+}
 
 export function findPortalUserByUsername(username) {
-  return portalUsers.find(user => user.username === username);
+  const users = (state && state.portalUsers) ? state.portalUsers : seedPortalUsers();
+  return users.find(user => user.username === username);
+}
+
+export function revocarAccesoPortalCliente(clientId) {
+  if (!state || !state.portalUsers) return;
+  let modificado = false;
+  state.portalUsers.forEach(user => {
+    if (user.clientId === clientId && user.activo) {
+      user.activo = false;
+      user.revocadoEn = new Date().toISOString();
+      modificado = true;
+    }
+  });
+  if (modificado) {
+    saveState();
+  }
 }
 
 export const paymentTypes = {
@@ -179,25 +202,35 @@ export function loadState() {
 
   if (!raw) {
     const seeded = seedData();
-    return { ...seeded, productos: seeded.productos.map(normalizeProduct) };
+    return {
+      ...seeded,
+      productos: seeded.productos.map(normalizeProduct),
+      portalUsers: seedPortalUsers(),
+    };
   }
 
   try {
     const parsed = JSON.parse(raw);
     const facturas = (parsed.facturas || []).map(normalizeInvoice);
     const productos = (parsed.productos || []).map(normalizeProduct);
+    const portalUsers = (parsed.portalUsers || seedPortalUsers()).map(u => ({
+      ...u,
+      passwordHash: u.passwordHash || 'a9004e774acb60851ed6826fd41dde8636cfc06471aedc25d3ce5230740db3a0',
+      activo: u.activo !== false,
+    }));
 
     return {
       clientes: parsed.clientes || [],
       productos,
       facturas,
+      portalUsers,
       nextFacturaId: parsed.nextFacturaId || 1,
       nextProductoId: parsed.nextProductoId || 1,
       nextClienteId: parsed.nextClienteId || 1,
     };
   } catch (e) {
     console.error('Datos guardados corruptos, usando datos iniciales:', e);
-    return seedData();
+    return { ...seedData(), portalUsers: seedPortalUsers() };
   }
 }
 
@@ -218,6 +251,7 @@ export function serializeState() {
         fecha: p.fecha instanceof Date ? p.fecha.toISOString() : p.fecha,
       })),
     })),
+    portalUsers: state.portalUsers || seedPortalUsers(),
     nextFacturaId: state.nextFacturaId,
     nextProductoId: state.nextProductoId,
     nextClienteId: state.nextClienteId,
@@ -300,6 +334,15 @@ export function registrarPago(factura, { monto, fecha, nota = '' }) {
   factura.monto = Math.max(0, saldoActual - pagoValido);
   factura.fechaPago = pago.fecha;
   factura.estadoPago = factura.monto <= 0 ? 'pagado' : 'pendiente';
+
+  // Regla de seguridad: Si el cliente canceló la totalidad de su deuda (Saldo ₡0), revocar acceso al portal
+  if (factura.clienteId) {
+    const facturasPendientesCliente = state.facturas.filter(f => f.clienteId === factura.clienteId && f.estadoPago === 'pendiente' && (Number(f.monto) || 0) > 0);
+    if (facturasPendientesCliente.length === 0) {
+      revocarAccesoPortalCliente(factura.clienteId);
+    }
+  }
+
   saveState();
   return factura;
 }

@@ -17,12 +17,17 @@ import {
   registrarPago,
   AUTH_KEY,
   findPortalUserByUsername,
+  revocarAccesoPortalCliente,
+  ADMIN_USERNAME,
+  ADMIN_PASSWORD_HASH,
   convertToCRC,
   gananciaProducto,
   estadoVidaUtil,
   serieDuplicada,
 } from './state.js';
 import { createInvoiceForm } from './invoice-form.js';
+import { initReportsUI } from './reports.js';
+import { sha256 } from './domain.js';
 
 function query(id) {
   return document.getElementById(id);
@@ -341,6 +346,7 @@ function renderAll() {
   renderInventario();
   renderClientes();
   renderPortalView();
+  if (reportsUI) reportsUI.render();
   saveState();
 }
 
@@ -354,12 +360,16 @@ function switchView(viewKey) {
   query('pageSub').textContent = viewMeta[viewKey].sub;
   query('btnNewLabel').textContent = viewMeta[viewKey].btn;
   currentView = viewKey;
+  if (viewKey === 'reportes' && reportsUI) {
+    reportsUI.render();
+  }
 }
 
 const viewMeta = {
   cxc: { title: 'Cuentas por cobrar', sub: 'Facturas pendientes de cobro a clientes de equipo de gimnasio', btn: 'Nueva factura' },
   inventario: { title: 'Inventario', sub: 'Equipo de gimnasio disponible para venta', btn: 'Nuevo producto' },
   clientes: { title: 'Clientes', sub: 'Gimnasios y negocios a los que se les vende equipo', btn: 'Nuevo cliente' },
+  reportes: { title: 'Reportes & Analítica', sub: 'Centro integral de inteligencia financiera, cartera, inventario y clientes', btn: 'Imprimir / PDF' },
 };
 
 let currentView = 'cxc';
@@ -388,6 +398,8 @@ const invoiceForm = createInvoiceForm({
   today,
   modalFactura,
 });
+
+const reportsUI = initReportsUI({ query, state });
 
 const openFacturaModal = invoiceForm.open;
 const closeFacturaModal = invoiceForm.close;
@@ -450,17 +462,21 @@ function closeProductoModal() {
 
 function openClienteModal(clienteId) {
   editingClienteId = clienteId || null;
+  const deleteBtn = query('deleteClienteFromModal');
   if (clienteId) {
     const cliente = clienteById(clienteId);
+    if (!cliente) return;
     query('modalClienteTitle').textContent = 'Editar cliente';
     query('icId').value = cliente.id;
     query('icNombre').value = cliente.nombre;
     query('icContacto').value = cliente.contacto || '';
+    if (deleteBtn) deleteBtn.style.display = 'inline-flex';
   } else {
     query('modalClienteTitle').textContent = 'Nuevo cliente';
     query('icId').value = '';
     query('icNombre').value = '';
     query('icContacto').value = '';
+    if (deleteBtn) deleteBtn.style.display = 'none';
   }
   modalCliente.style.display = 'flex';
 }
@@ -473,6 +489,7 @@ function closeClienteModal() {
 function openDeleteClienteModal(clienteId) {
   deletingClienteId = clienteId;
   const cliente = clienteById(clienteId);
+  if (!cliente) return;
   const facturasAsoc = state.facturas.filter(f => f.clienteId === clienteId);
   const msg = facturasAsoc.length > 0
     ? `<strong style="color:var(--bone)">${cliente.nombre}</strong> tiene ${facturasAsoc.length} factura${facturasAsoc.length === 1 ? '' : 's'} asociada${facturasAsoc.length === 1 ? '' : 's'}. Si lo eliminás, esas facturas quedarán sin cliente asignado. ¿Continuar?`
@@ -759,7 +776,24 @@ function renderPortalView() {
 
 function checkAuth() {
   const authValue = getStoredAuth();
-  const isPortal = typeof authValue === 'string' && authValue.startsWith('portal:');
+  let isPortal = typeof authValue === 'string' && authValue.startsWith('portal:');
+
+  if (isPortal) {
+    const username = authValue.replace('portal:', '');
+    const portalUser = findPortalUserByUsername(username);
+    if (!portalUser || !portalUser.activo) {
+      clearStoredAuth();
+      isPortal = false;
+    } else {
+      const clienteFacturasPendientes = state.facturas.filter(f => f.clienteId === portalUser.clientId && f.estadoPago === 'pendiente' && (Number(f.monto) || 0) > 0);
+      if (clienteFacturasPendientes.length === 0 && state.facturas.some(f => f.clienteId === portalUser.clientId)) {
+        revocarAccesoPortalCliente(portalUser.clientId);
+        clearStoredAuth();
+        isPortal = false;
+      }
+    }
+  }
+
   const isLoggedIn = isPortal || authValue === 'admin';
 
   document.body.classList.toggle('locked', !isLoggedIn);
@@ -775,28 +809,54 @@ function checkAuth() {
   return isLoggedIn;
 }
 
-function attemptLogin() {
+async function attemptLogin() {
   const user = query('loginUser').value.trim();
   const pass = query('loginPass').value;
   const errBox = query('loginError');
-  const VALID_USER = 'Cristian';
-  const VALID_PASS = 'Cris1234';
 
-  const portalUser = findPortalUserByUsername(user);
-  if (portalUser && pass === portalUser.password) {
-    setStoredAuth(`portal:${portalUser.username}`);
+  if (!user || !pass) {
+    errBox.textContent = 'Por favor ingresá usuario y contraseña.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const passHash = await sha256(pass);
+
+  // 1. Verificación Admin (Cristian)
+  if (user === ADMIN_USERNAME && passHash === ADMIN_PASSWORD_HASH) {
+    setStoredAuth('admin');
     errBox.style.display = 'none';
     checkAuth();
     return;
   }
 
-  if (user === VALID_USER && pass === VALID_PASS) {
-    setStoredAuth('admin');
-    errBox.style.display = 'none';
-    checkAuth();
-  } else {
-    errBox.style.display = 'block';
+  // 2. Verificación Portal Negocio
+  const portalUser = findPortalUserByUsername(user);
+  if (portalUser) {
+    if (!portalUser.activo) {
+      errBox.textContent = 'Acceso inactivo: Este negocio no tiene saldos pendientes o la clave fue cancelada al saldar la deuda.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    const clienteFacturasPendientes = state.facturas.filter(f => f.clienteId === portalUser.clientId && f.estadoPago === 'pendiente' && (Number(f.monto) || 0) > 0);
+    if (clienteFacturasPendientes.length === 0 && state.facturas.some(f => f.clienteId === portalUser.clientId)) {
+      revocarAccesoPortalCliente(portalUser.clientId);
+      errBox.textContent = 'Acceso inactivo: La cuenta ya canceló la totalidad de su saldo pendiente.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    if (passHash === portalUser.passwordHash || (portalUser.password && pass === portalUser.password)) {
+      setStoredAuth(`portal:${portalUser.username}`);
+      errBox.style.display = 'none';
+      checkAuth();
+      return;
+    }
   }
+
+  errBox.textContent = 'Usuario o contraseña incorrectos.';
+  errBox.style.display = 'block';
 }
 
 function setupEventListeners() {
@@ -810,9 +870,16 @@ function setupEventListeners() {
   query('btnNew').addEventListener('click', () => {
     if (currentView === 'inventario') openProductoModal();
     else if (currentView === 'clientes') openClienteModal(null);
+    else if (currentView === 'reportes') window.print();
     else openFacturaModal();
   });
-  query('btnExport').addEventListener('click', exportarCsv);
+  query('btnExport').addEventListener('click', () => {
+    if (currentView === 'reportes') {
+      reportsUI.exportView();
+    } else {
+      exportarCsv();
+    }
+  });
   query('btnNewCliente').addEventListener('click', () => openClienteModal(null));
 
   query('saveFactura').addEventListener('click', () => {
@@ -963,9 +1030,19 @@ function setupEventListeners() {
     }
 
     closeClienteModal();
-    populateSelects();
     renderAll();
   });
+
+  const deleteFromModalBtn = query('deleteClienteFromModal');
+  if (deleteFromModalBtn) {
+    deleteFromModalBtn.addEventListener('click', () => {
+      const idToDelete = editingClienteId;
+      closeClienteModal();
+      if (idToDelete) {
+        openDeleteClienteModal(idToDelete);
+      }
+    });
+  }
 
   query('closeModalCliente').addEventListener('click', closeClienteModal);
   query('cancelCliente').addEventListener('click', closeClienteModal);
@@ -974,7 +1051,6 @@ function setupEventListeners() {
   query('confirmDeleteCliente').addEventListener('click', () => {
     state.clientes = state.clientes.filter(c => c.id !== deletingClienteId);
     closeDeleteClienteModal();
-    populateSelects();
     renderAll();
   });
 
@@ -990,6 +1066,17 @@ function setupEventListeners() {
     closeDetalleFacturaModal();
     openPagoModal(facturaId);
   });
+
+  const editFromHistoryBtn = query('editClienteFromHistory');
+  if (editFromHistoryBtn) {
+    editFromHistoryBtn.addEventListener('click', () => {
+      const idToEdit = historialClienteId;
+      closeHistorialClienteModal();
+      if (idToEdit) {
+        openClienteModal(idToEdit);
+      }
+    });
+  }
 
   query('closeModalHistorialCliente').addEventListener('click', closeHistorialClienteModal);
   query('closeHistorialCliente').addEventListener('click', closeHistorialClienteModal);

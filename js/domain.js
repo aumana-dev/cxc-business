@@ -40,3 +40,16 @@ export function serieDuplicada(numeroSerie, excludeId, productos) {
   if (!value) return false;
   return productos.some(p => p.id !== excludeId && (p.numeroSerie || '').trim().toLowerCase() === value);
 }
+
+export async function sha256(str) {
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const buf = new TextEncoder().encode(str);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  const nodeCrypto = await import('node:crypto');
+  return nodeCrypto.createHash('sha256').update(str).digest('hex');
+}
+

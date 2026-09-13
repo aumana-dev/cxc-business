@@ -31,10 +31,7 @@
         <input type="password" id="loginPass" placeholder="Contraseña" autocomplete="current-password">
       </div>
       <button class="btn btn-primary login-submit" id="loginBtn">Entrar</button>
-      <div class="login-hint">Demo negocio: usuario <strong>gimnasio-titan</strong> · clave
-        <strong>Negocio2025</strong>
-      </div>
-      <div class="login-foot">Sesión local · Ebizu v0.2</div>
+      <div class="login-foot">Plataforma segura · Ebizu</div>
     </div>
   </div>
 
@@ -101,6 +98,12 @@
           <path d="M2.5 19c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6M16.5 8.5a3 3 0 110-5M16 13c2.5.3 4.5 2 4.5 4.5" />
         </svg>
         Clientes
+      </button>
+      <button class="nav-item" data-view="reportes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 20V10M12 20V4M6 20v-6" />
+        </svg>
+        Reportes &amp; Analítica
       </button>
     </nav>
     <div class="sidebar-foot">v0.1 · prototipo</div>
@@ -257,6 +260,93 @@
         </div>
       </div>
 
+      <!-- ===== VIEW: REPORTES ===== -->
+      <div class="view" id="view-reportes">
+        <div class="report-header-tools">
+          <div class="report-tabs">
+            <button class="report-tab-btn active" data-tab="resumen">📊 Resumen Ejecutivo</button>
+            <button class="report-tab-btn" data-tab="aging">⏳ Antigüedad de Saldos (Aging)</button>
+            <button class="report-tab-btn" data-tab="inventario">📦 Rentabilidad &amp; Vida Útil</button>
+            <button class="report-tab-btn" data-tab="clientes">👥 Ranking &amp; Score Clientes</button>
+            <button class="report-tab-btn" data-tab="pagos">📑 Auditoría de Pagos</button>
+          </div>
+          <div class="report-actions">
+            <button class="btn btn-ghost" id="btnExportReportView" title="Exportar tabla actual a Excel">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+              </svg>
+              Exportar vista
+            </button>
+            <button class="btn btn-ghost" id="btnExportMasterReport" title="Exportar reporte consolidado completo">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+              Consolidado Maestro
+            </button>
+            <button class="btn btn-primary" id="btnPrintReport" title="Imprimir o exportar a PDF">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" />
+              </svg>
+              Imprimir / PDF
+            </button>
+          </div>
+        </div>
+
+        <div class="report-filters-bar">
+          <div class="report-filter-item">
+            <label>Período</label>
+            <select id="repFilterPeriodo">
+              <option value="todo">Todo el histórico</option>
+              <option value="hoy">Hoy</option>
+              <option value="este_mes">Este mes</option>
+              <option value="mes_anterior">Mes anterior</option>
+              <option value="este_ano">Este año</option>
+              <option value="personalizado">Rango personalizado...</option>
+            </select>
+          </div>
+
+          <div class="report-filter-item" id="reportCustomDatesWrap" style="display:none; flex-direction:row; gap:6px;">
+            <div class="report-filter-item">
+              <label>Desde</label>
+              <input type="date" id="repFechaDesde">
+            </div>
+            <div class="report-filter-item">
+              <label>Hasta</label>
+              <input type="date" id="repFechaHasta">
+            </div>
+          </div>
+
+          <div class="report-filter-item">
+            <label>Cliente</label>
+            <select id="repFilterCliente">
+              <option value="todos">Todos los clientes</option>
+            </select>
+          </div>
+
+          <div class="report-filter-item">
+            <label>Tipo de Pago</label>
+            <select id="repFilterTipoPago">
+              <option value="todos">Todos</option>
+              <option value="credito">Crédito</option>
+              <option value="contado">Contado</option>
+            </select>
+          </div>
+
+          <div class="report-filter-item">
+            <label>Estado</label>
+            <select id="repFilterEstado">
+              <option value="todos">Todas las facturas</option>
+              <option value="pendientes">Pendientes de cobro</option>
+              <option value="vencidas">Vencidas (Mora)</option>
+              <option value="al_dia">Al día</option>
+              <option value="pagadas">Pagadas / Canceladas</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="reportContentArea"></div>
+      </div>
+
     </div>
   </main>
 
@@ -366,6 +456,7 @@
         </div>
       </div>
       <div class="modal-foot">
+        <button class="btn btn-primary modal-danger-action" id="deleteClienteFromModal" style="display:none; margin-right:auto;">Eliminar</button>
         <button class="btn btn-ghost" id="cancelCliente">Cancelar</button>
         <button class="btn btn-primary" id="saveCliente">Guardar cliente</button>
       </div>
@@ -520,6 +611,7 @@
         <div class="portal-list" id="historialClienteLista"></div>
       </div>
       <div class="modal-foot">
+        <button class="btn btn-ghost" id="editClienteFromHistory" style="margin-right:auto;">Editar / Eliminar cliente</button>
         <button class="btn btn-ghost" id="closeHistorialCliente">Cerrar</button>
       </div>
     </div>
@@ -527,11 +619,6 @@
 
   <div class="save-indicator" id="saveIndicator"><span class="dot"></span>Guardado</div>
 
-  <script>
-    document.body.classList.remove('locked');
-    const loginScreen = document.getElementById('loginScreen');
-    if (loginScreen) loginScreen.style.display = 'none';
-  </script>
   <script type="module" src="js/app.js"></script>
 </body>
 
